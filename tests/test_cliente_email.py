@@ -6,8 +6,6 @@ import base64
 import gzip
 import json
 
-import pytest
-import requests
 
 from nfse.cliente import ClienteNFSe
 from nfse.email_envio import ConfiguracaoEmail, enviar_nfse

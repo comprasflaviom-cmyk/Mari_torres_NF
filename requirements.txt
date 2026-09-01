@@ -5,4 +5,5 @@ requests>=2.32         # cliente HTTP (a conexão mTLS é montada em nfse/certif
 cryptography>=42.0     # leitura do certificado A1 (.pfx/.p12 e PEM)
 signxml>=3.2           # assinatura XMLDSig da DPS (enveloped, RSA-SHA1/SHA256)
 lxml>=5.0              # backend XML usado pelo signxml
-python-dotenv>=1.0     # carrega credenciais do arquivo .env
+python-dotenv>=1.0     # carrega credenciais do arquivo .env (modo linha de comando)
+keyring>=25.0          # guarda as senhas no cofre do sistema (modo interface gráfica)

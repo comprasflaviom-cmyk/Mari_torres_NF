@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import gzip
 from datetime import date
 from decimal import Decimal
 
@@ -14,7 +13,7 @@ from nfse.assinatura import assinar_dps, desempacotar_retorno, empacotar_para_en
 from nfse.config import NAMESPACE_DPS
 from nfse.dps import dps_para_xml, gerar_id_dps, montar_dps
 from nfse.estado import ControleEmissao, impressao_da_linha
-from nfse.planilha import ErroPlanilha, iterar_faturamento, validar_linha
+from nfse.planilha import ErroPlanilha, iterar_faturamento
 
 NS = {"n": NAMESPACE_DPS, "ds": "http://www.w3.org/2000/09/xmldsig#"}
 
