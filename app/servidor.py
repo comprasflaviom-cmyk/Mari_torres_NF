@@ -9,6 +9,7 @@ linha de comando.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from datetime import date, datetime
 from pathlib import Path
@@ -20,16 +21,34 @@ from fastapi.templating import Jinja2Templates
 
 from nfse import armazenamento_config as ac
 from nfse.certificado import ErroCertificado, carregar_certificado
+from nfse.estado import ControleEmissao
 from nfse.email_envio import ErroEmail, enviar_nfse
 from nfse.planilha import ErroPlanilha
+from nfse.backup import Espelho
 from nfse.clientes import completar_com_cadastro
+from nfse.estado import nome_da_maquina
 from nfse.servico import OpcoesEmissao, montar_emissor
 
 from .rotas_clientes import registrar as registrar_rotas_clientes, repositorio_clientes, repositorio_emissoes
 from .seguranca import Guardiao, gravar_cookie, montar_middleware
 from .sessao import ESTADO, LoteEmAndamento, importar_planilha
 
-RAIZ = Path(__file__).resolve().parent
+def _raiz_dos_recursos() -> Path:
+    """Onde estão `templates/` e `static/`.
+
+    Rodando do código-fonte é a pasta deste arquivo. Dentro do executável do
+    PyInstaller, os módulos ficam num arquivo compactado e `__file__` pode não
+    apontar para um caminho real — por isso o lançador exporta
+    `EMISSOR_RAIZ_PACOTE`.
+    """
+    if pacote := os.getenv("EMISSOR_RAIZ_PACOTE"):
+        candidato = Path(pacote) / "app"
+        if (candidato / "templates").is_dir():
+            return candidato
+    return Path(__file__).resolve().parent
+
+
+RAIZ = _raiz_dos_recursos()
 CONFIRMACAO_PRODUCAO = "EMITIR EM PRODUCAO"
 
 
@@ -80,6 +99,9 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
             cofre_ok=ac.cofre_disponivel(),
             importacao=ESTADO.importacao,
             trabalho=ESTADO.trabalho.resumo(),
+            backup=_situacao_backup(config),
+            maquina=nome_da_maquina(),
+            conflito_maquina=_conflito_de_maquina(config),
         )
 
     # ------------------------------------------------------------------
@@ -93,6 +115,8 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
             cofre_ok=ac.cofre_disponivel(),
             tem_senha_certificado=bool(ac.ler_senha(ac.CHAVE_SENHA_CERTIFICADO)),
             tem_senha_smtp=bool(ac.ler_senha(ac.CHAVE_SENHA_SMTP)),
+            maquina=nome_da_maquina(),
+            conflito_maquina=_conflito_de_maquina(_carregar_config_tolerante()),
         )
 
     @app.post("/configuracao")
@@ -130,6 +154,7 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         config.numero_dps_inicial = numero("numero_dps_inicial", config.numero_dps_inicial)
         config.diretorio_notas = texto("diretorio_notas")
         config.diretorio_logs = texto("diretorio_logs")
+        config.pasta_backup = texto("pasta_backup")
 
         config.email_enviar = marcado("email_enviar")
         config.email_smtp_servidor = texto("email_smtp_servidor", config.email_smtp_servidor)
@@ -158,6 +183,27 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
 
         ac.salvar(config)
         return RedirectResponse("/configuracao?salvo=true", status_code=303)
+
+    @app.post("/configuracao/assumir-maquina")
+    def assumir_maquina():
+        """Passa para este computador o controle de numeração criado em outro.
+
+        Só faz sentido quando a outra máquina não emite mais nesta série —
+        por isso é uma ação explícita, e não algo que aconteça sozinho.
+        """
+        config = _carregar_config_tolerante()
+        controle = ControleEmissao.carregar(
+            config.para_configuracao().diretorio_logs,
+            config.ambiente, config.serie_dps, config.numero_dps_inicial,
+        )
+        anterior = controle.maquina
+        controle.assumir_maquina()
+        controle.salvar()
+        return JSONResponse({
+            "ok": True,
+            "mensagem": f"Controle da série {config.serie_dps} transferido de "
+                        f"{anterior or 'desconhecido'} para {nome_da_maquina()}.",
+        })
 
     @app.post("/configuracao/testar-certificado")
     def testar_certificado():
@@ -281,6 +327,9 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
             competencia_data = datetime.strptime(competencia, "%Y-%m").date().replace(day=1)
         except ValueError:
             return JSONResponse({"ok": False, "mensagem": "Competência inválida."}, 400)
+
+        if outra := _conflito_de_maquina(config):
+            return JSONResponse({"ok": False, "mensagem": _mensagem_conflito(config, outra)}, 409)
 
         selecionadas = {int(n) for n in linhas.split(",") if n.strip().isdigit()} or None
         escolhidas = ESTADO.importacao.selecionadas(selecionadas)
@@ -433,6 +482,39 @@ def _completar_com_cadastro(importacao) -> None:
         previa.do_cadastro = completados
         previa.recebe_email = cliente.receber_por_email
         previa.cliente_ativo = cliente.ativo
+
+
+def _mensagem_conflito(config, outra: str) -> str:
+    return (
+        f"O controle da série {config.serie_dps} foi criado no computador {outra!r}, "
+        f"e este é {nome_da_maquina()!r}. Duas máquinas na mesma série geram "
+        "numeração repetida. Dê uma série própria a este computador na tela de "
+        "Configuração, ou assuma o controle por lá se a outra máquina não emite mais."
+    )
+
+
+def _situacao_backup(config: ac.ConfiguracaoApp) -> dict:
+    espelho = Espelho(config.para_configuracao().diretorio_backup)
+    if not espelho.ativo:
+        return {"ativo": False}
+    ultimo = espelho.ultimo_backup()
+    return {
+        "ativo": True,
+        "destino": str(espelho.destino),
+        "ultimo": ultimo.strftime("%d/%m/%Y às %H:%M") if ultimo else None,
+    }
+
+
+def _conflito_de_maquina(config: ac.ConfiguracaoApp) -> str | None:
+    """Nome do outro computador, se o controle de numeração veio de lá."""
+    try:
+        controle = ControleEmissao.carregar(
+            config.para_configuracao().diretorio_logs,
+            config.ambiente, config.serie_dps, config.numero_dps_inicial,
+        )
+    except (OSError, ValueError):
+        return None
+    return controle.conflito_de_maquina()
 
 
 def _registrar_no_historico(ambiente: str):

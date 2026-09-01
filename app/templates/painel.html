@@ -13,13 +13,25 @@
   <div class="indicador">
     <div class="rotulo">Série da DPS</div>
     <div class="valor">{{ config.serie_dps }}</div>
-    <div class="discreto">Cada computador precisa de uma série própria.</div>
+    <div class="discreto">Neste computador ({{ maquina }}).</div>
   </div>
   <div class="indicador">
     <div class="rotulo">Certificado A1</div>
     <div class="valor">{{ certificado.validade if certificado.ok else '—' }}</div>
     <div class="discreto">
       {% if certificado.ok %}Vence em {{ certificado.dias }} dias.{% else %}Não configurado.{% endif %}
+    </div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Último backup</div>
+    <div class="valor" style="font-size:19px">
+      {% if not backup.ativo %}Desligado
+      {% elif backup.ultimo %}{{ backup.ultimo }}
+      {% else %}Ainda não rodou{% endif %}
+    </div>
+    <div class="discreto">
+      {% if backup.ativo %}{{ backup.destino }}
+      {% else %}Configure uma pasta de backup.{% endif %}
     </div>
   </div>
   <div class="indicador">
@@ -32,6 +44,26 @@
     </div>
   </div>
 </div>
+
+{% if conflito_maquina %}
+  <div class="aviso aviso-erro" style="margin-top:18px">
+    <strong>Conflito de numeração.</strong>
+    O controle da série {{ config.serie_dps }} foi criado no computador
+    <span class="mono">{{ conflito_maquina }}</span>, e este é
+    <span class="mono">{{ maquina }}</span>. Duas máquinas na mesma série geram
+    numeração repetida — a emissão está bloqueada até você resolver isso na
+    tela de <a href="/configuracao">Configuração</a>.
+  </div>
+{% endif %}
+
+{% if not backup.ativo %}
+  <div class="aviso aviso-atencao" style="margin-top:18px">
+    <strong>Backup automático desligado.</strong>
+    Se este laptop parar de funcionar, as notas emitidas e o controle de
+    numeração vão junto. Aponte uma pasta (OneDrive, Drive ou rede) na
+    <a href="/configuracao">Configuração</a>.
+  </div>
+{% endif %}
 
 {% if certificado.ok and certificado.alerta %}
   <div class="aviso aviso-atencao" style="margin-top:18px">

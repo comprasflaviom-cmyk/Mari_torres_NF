@@ -167,6 +167,10 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
                 {"ok": False, "mensagem": "Configuração incompleta: " + " ".join(pendencias)}, 400
             )
 
+        from .servidor import _conflito_de_maquina, _mensagem_conflito
+        if outra := _conflito_de_maquina(config):
+            return JSONResponse({"ok": False, "mensagem": _mensagem_conflito(config, outra)}, 409)
+
         cliente = repositorio_clientes().buscar(str(formulario.get("documento", "")))
         if cliente is None:
             return JSONResponse({"ok": False, "mensagem": "Selecione um cliente do cadastro."}, 400)

@@ -118,6 +118,10 @@ class Configuracao:
     timeout_segundos: int
     max_tentativas: int
 
+    # Pasta de espelhamento (OneDrive, Drive, rede). None = sem backup.
+    # Fica por último com padrão para não obrigar quem já constrói Configuracao.
+    diretorio_backup: Path | None = None
+
     # Campos derivados
     url_base: str = field(init=False)
     tp_amb: int = field(init=False)
@@ -173,6 +177,7 @@ def carregar_configuracao() -> Configuracao:
         caminho_planilha=_caminho_opcional(os.getenv("PLANILHA", "faturamento.xlsx")),
         diretorio_notas=_caminho_opcional(os.getenv("DIR_NOTAS", "notas")),
         diretorio_logs=_caminho_opcional(os.getenv("DIR_LOGS", "logs")),
+        diretorio_backup=_caminho_opcional(os.getenv("DIR_BACKUP")),
         serie_dps=os.getenv("DPS_SERIE", "1").strip(),
         numero_dps_inicial=int(os.getenv("DPS_NUMERO_INICIAL", "1")),
         timeout_segundos=int(os.getenv("HTTP_TIMEOUT", "60")),

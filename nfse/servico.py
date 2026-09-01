@@ -18,13 +18,14 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from .armazenamento import salvar_nota, salvar_rejeicao
+from .backup import Espelho, espelhar_nota
 from .assinatura import assinar_dps, empacotar_para_envio
 from .certificado import CertificadoA1, carregar_certificado, criar_sessao_mtls
 from .cliente import ClienteNFSe
 from .config import Configuracao
 from .dps import dps_para_xml, montar_dps
 from .email_envio import ConfiguracaoEmail, ErroEmail, enviar_nfse
-from .estado import ControleEmissao, impressao_da_linha
+from .estado import ConflitoDeMaquina, ControleEmissao, impressao_da_linha, nome_da_maquina
 from .logs import RegistroLinha, Relatorio
 from .planilha import LinhaFaturamento
 
@@ -78,6 +79,7 @@ class Emissor:
     certificado: CertificadoA1
     cliente: ClienteNFSe
     controle: ControleEmissao
+    espelho: Espelho | None = None
 
     # ------------------------------------------------------------------
     def emitir_lote(
@@ -278,12 +280,38 @@ class Emissor:
 
         # Entrega ao cliente. Falha aqui NÃO invalida a nota: ela já está
         # autorizada na Sefin. Fica no relatório para reenvio posterior.
+        # Espelhar antes de tentar o e-mail: o backup do controle de numeração
+        # é o que menos pode faltar se a máquina morrer.
+        self._espelhar(arquivos, ao_progredir, contexto)
+
         registro.email = self._entregar_por_email(linha, opcoes, resposta, arquivos, ao_progredir, contexto)
 
         ao_progredir(EventoProgresso(
             tipo="fim_linha", situacao="AUTORIZADA", registro=registro, **contexto,
             mensagem=f"{rotulo} | AUTORIZADA | chave {resposta.chave_acesso}",
         ))
+
+    def _espelhar(self, arquivos, ao_progredir, contexto) -> None:
+        """Copia a nota e o controle para a pasta de backup.
+
+        Falha aqui NÃO invalida a nota: ela já está autorizada e gravada em
+        disco. Vira aviso, para a pessoa saber que o backup parou.
+        """
+        if self.espelho is None or not self.espelho.ativo:
+            return
+        try:
+            total = espelhar_nota(
+                self.espelho, arquivos, self.config.diretorio_notas, self.controle.caminho
+            )
+            ao_progredir(EventoProgresso(
+                tipo="detalhe", mensagem=f"Backup: {total} arquivo(s) copiado(s).", **contexto
+            ))
+        except OSError as exc:
+            ao_progredir(EventoProgresso(
+                tipo="aviso",
+                mensagem=f"Backup falhou (a nota está salva localmente): {exc}",
+                **contexto,
+            ))
 
     def _entregar_por_email(self, linha, opcoes, resposta, arquivos, ao_progredir, contexto) -> str:
         # Cliente marcado no cadastro para não receber: a nota já está emitida e
@@ -321,11 +349,16 @@ def _moeda(valor) -> str:
     return f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def montar_emissor(config: Configuracao, config_email: ConfiguracaoEmail) -> Emissor:
+def montar_emissor(
+    config: Configuracao,
+    config_email: ConfiguracaoEmail,
+    permitir_outra_maquina: bool = False,
+) -> Emissor:
     """Carrega o certificado, abre a sessão mTLS e devolve um `Emissor` pronto.
 
-    Levanta `ErroCertificado` se o A1 estiver ausente, vencido ou ilegível —
-    o chamador (CLI ou interface) decide como apresentar a falha.
+    Levanta `ErroCertificado` se o A1 estiver ausente, vencido ou ilegível, e
+    `ConflitoDeMaquina` se o controle de numeração veio de outro computador —
+    o chamador (CLI ou interface) decide como apresentar cada falha.
     """
     certificado = carregar_certificado(config)
     certificado.validar_vigencia()
@@ -333,10 +366,22 @@ def montar_emissor(config: Configuracao, config_email: ConfiguracaoEmail) -> Emi
     controle = ControleEmissao.carregar(
         config.diretorio_logs, config.ambiente, config.serie_dps, config.numero_dps_inicial
     )
+
+    if (outra := controle.conflito_de_maquina()) and not permitir_outra_maquina:
+        raise ConflitoDeMaquina(
+            f"O controle da série {config.serie_dps} foi criado no computador "
+            f"{outra!r}, e este é {nome_da_maquina()!r}. Duas máquinas na mesma "
+            "série geram numeração repetida — dê uma série própria a cada "
+            "computador antes de continuar."
+        )
+    if permitir_outra_maquina:
+        controle.assumir_maquina()
+
     return Emissor(
         config=config,
         config_email=config_email,
         certificado=certificado,
         cliente=cliente,
         controle=controle,
+        espelho=Espelho(config.diretorio_backup),
     )

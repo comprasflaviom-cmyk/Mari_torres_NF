@@ -39,6 +39,23 @@
     });
   });
 
+  /* ---- Assumir o controle de numeração nesta máquina ---- */
+  document.querySelectorAll("[data-assumir]").forEach(function (botao) {
+    botao.addEventListener("click", function () {
+      var saida = document.getElementById("resultado-maquina");
+      botao.disabled = true;
+      saida.textContent = "Transferindo...";
+      enviar(botao.getAttribute("data-assumir"), new FormData())
+        .then(function (r) {
+          saida.textContent = r.dados.mensagem;
+          saida.className = r.dados.ok ? "etiqueta etiqueta-ok" : "etiqueta etiqueta-erro";
+          if (r.dados.ok) setTimeout(function () { location.reload(); }, 1200);
+        })
+        .catch(function (erro) { saida.textContent = "Falha: " + erro; })
+        .finally(function () { botao.disabled = false; });
+    });
+  });
+
   /* ---- Interruptores do cadastro de clientes ---- */
   document.querySelectorAll(".interruptor").forEach(function (botao) {
     botao.addEventListener("click", function () {

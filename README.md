@@ -246,6 +246,8 @@ não em arquivo de texto.
 | **Painel** | Ambiente, série da DPS, validade do certificado e situação do e-mail, tudo à vista antes de faturar. |
 | **Importar planilha** | Envia o `.xlsx` e mostra a grade de conferência: linhas válidas em verde, inválidas em vermelho com o motivo exato. **Nada é transmitido nesta tela.** |
 | **Emitir** | Competência, seleção de linhas, botão de simular ao lado do de emitir, barra de progresso e log ao vivo. |
+| **Nota avulsa** | Uma nota só, digitada na hora, escolhendo o cliente do cadastro. |
+| **Clientes** | Cadastro com endereço, e as duas chaves explicadas abaixo. |
 | **Histórico** | Notas já emitidas, com busca por cliente, CNPJ ou chave de acesso. |
 
 ### Travas de segurança
@@ -268,9 +270,73 @@ não em arquivo de texto.
 ### Uma série de DPS por computador
 
 `nDPS` é único **por série**. Com 2 a 4 laptops emitindo, dê a cada máquina uma
-série diferente (1, 2, 3...) na tela de configuração. Duas máquinas na mesma
+série diferente (1, 2, 3...) na tela de Configuração. Duas máquinas na mesma
 série geram numeração repetida — e número repetido é rejeição na melhor das
 hipóteses.
+
+O aplicativo grava o nome da máquina no arquivo de controle e **bloqueia a
+emissão** se detectar que o controle veio de outro computador (acontece ao
+restaurar backup na máquina errada, por exemplo). A saída correta é trocar a
+série; assumir o controle é uma ação explícita, para o caso de a outra máquina
+realmente não emitir mais naquela série.
+
+Na linha de comando o mesmo bloqueio vale, e `--assumir-maquina` é o
+equivalente do botão.
+
+### Cadastro de clientes: duas chaves, não uma
+
+Cada cliente tem **dois interruptores independentes**:
+
+| Chave | O que controla |
+|---|---|
+| **Ativo** | Se o cliente entra no faturamento e aparece na nota avulsa |
+| **Recebe por e-mail** | Se a NFS-e é enviada automaticamente para ele |
+
+São separadas de propósito. Um cliente pode pedir para **não** receber por
+e-mail — o contador dele busca o arquivo direto — e continuar sendo faturado
+normalmente. Com uma chave só, desligar o e-mail o tiraria do faturamento.
+E um cliente que encerrou contrato sai da lista sem ninguém precisar lembrar
+de mexer no e-mail dele.
+
+Quando o cliente está marcado para não receber, a nota é **emitida e arquivada
+normalmente** — só não sai e-mail, e o relatório registra isso.
+
+O cadastro também **completa o que falta na planilha**: se a linha não trouxer
+endereço, ele vem do cliente cadastrado (endereço incompleto do tomador é causa
+comum de rejeição). O que veio digitado na planilha tem precedência.
+
+Para levar o cadastro a outro laptop, use **Exportar** e **Importar** (JSON).
+É manual de propósito: colocar o banco SQLite numa pasta do OneDrive ou do
+Drive corrompe o arquivo, porque a sincronização copia banco aberto.
+
+### Backup automático
+
+Instalar num laptop cria um ponto único de falha: se a máquina morrer, vão
+junto as notas **e** o `controle_*.json` — e perder o controle é perder a
+sequência da numeração.
+
+Aponte uma pasta na Configuração (OneDrive, Drive ou rede servem — aqui é cópia
+de arquivo, não banco aberto). A cada nota autorizada, os arquivos dela e o
+controle de numeração são copiados para lá. O painel mostra a data do último
+backup, e o aplicativo avisa em vermelho enquanto isso estiver desligado.
+
+Falha no backup **não invalida a nota**: ela já está autorizada e gravada
+localmente. Vira aviso no log.
+
+### Empacotar como instalador Windows
+
+Veja [`empacotamento/LEIA-ME.md`](empacotamento/LEIA-ME.md). Resumo:
+
+```bat
+pip install pyinstaller
+pyinstaller empacotamento\emissor.spec --noconfirm
+```
+
+e depois compile `empacotamento\instalador.iss` no Inno Setup.
+
+> **Precisa de uma máquina Windows.** O PyInstaller não faz compilação cruzada.
+> O `LEIA-ME` também cobre o falso-positivo de antivírus, que é comum com
+> binário empacotado.
 
 ---
 

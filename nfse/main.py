@@ -22,6 +22,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from .certificado import ErroCertificado
+from .estado import ConflitoDeMaquina
 from .config import carregar_configuracao
 from .email_envio import ConfiguracaoEmail, ErroEmail
 from .logs import Relatorio, configurar_logger, marca_tempo_execucao
@@ -58,6 +59,10 @@ def _argumentos() -> argparse.Namespace:
                         help="Não envia a nota ao cliente por e-mail nesta execução.")
     parser.add_argument("--reemitir", action="store_true",
                         help="Ignora o controle de duplicidade. Use com cuidado.")
+    parser.add_argument("--assumir-maquina", action="store_true",
+                        help="Assume o controle de numeração criado em outro computador. "
+                             "Só use se tiver certeza de que a outra máquina não emite mais "
+                             "nesta série.")
     return parser.parse_args()
 
 
@@ -123,10 +128,14 @@ def executar() -> int:
 
     # ---- Dependências de emissão -----------------------------------------
     try:
-        emissor = montar_emissor(config, config_email)
+        emissor = montar_emissor(config, config_email, args.assumir_maquina)
     except ErroCertificado as exc:
         logger.error("Certificado: %s", exc)
         return 3
+    except ConflitoDeMaquina as exc:
+        logger.error("Numeração: %s", exc)
+        logger.error("Se tiver certeza, repita com --assumir-maquina.")
+        return 5
 
     certificado = emissor.certificado
     logger.info("Certificado: %s", certificado.titular)
@@ -134,6 +143,13 @@ def executar() -> int:
                 certificado.valido_ate.strftime("%d/%m/%Y"), certificado.dias_para_vencer)
     if certificado.dias_para_vencer < 30:
         logger.warning("Certificado vence em menos de 30 dias — providencie a renovação.")
+
+    if emissor.espelho and emissor.espelho.ativo:
+        logger.info("Backup automático em: %s", emissor.espelho.destino)
+    else:
+        logger.warning(
+            "Backup automático desligado. Defina DIR_BACKUP para espelhar notas e numeração."
+        )
 
     for nivel, mensagem in avisos_email:
         logger.log(nivel, "%s", mensagem)

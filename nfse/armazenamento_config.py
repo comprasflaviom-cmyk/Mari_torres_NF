@@ -160,6 +160,8 @@ class ConfiguracaoApp:
     diretorio_notas: str = ""
     diretorio_logs: str = ""
     ultima_planilha: str = ""
+    # Pasta de espelhamento: OneDrive, Drive ou unidade de rede servem.
+    pasta_backup: str = ""
 
     # Numeração
     serie_dps: str = "1"
@@ -219,6 +221,7 @@ class ConfiguracaoApp:
             numero_dps_inicial=self.numero_dps_inicial,
             timeout_segundos=self.http_timeout,
             max_tentativas=self.http_max_tentativas,
+            diretorio_backup=Path(self.pasta_backup) if self.pasta_backup.strip() else None,
         )
 
     def para_configuracao_email(self, senha_smtp: str | None = None) -> ConfiguracaoEmail:

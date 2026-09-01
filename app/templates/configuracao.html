@@ -190,8 +190,44 @@
         <label for="diretorio_logs">Pasta de logs e controle</label>
         <input type="text" id="diretorio_logs" name="diretorio_logs" value="{{ config.diretorio_logs }}"
                placeholder="em branco = pasta do aplicativo">
-        <span class="dica">Guarda o controle de numeração. Inclua esta pasta no seu backup.</span>
+        <span class="dica">Guarda o controle de numeração.</span>
       </div>
+      <div class="campo">
+        <label for="pasta_backup">Pasta de backup automático</label>
+        <input type="text" id="pasta_backup" name="pasta_backup" value="{{ config.pasta_backup }}"
+               placeholder="ex.: C:\Users\voce\OneDrive\NFS-e">
+        <span class="dica">
+          A cada nota autorizada, os arquivos e o controle de numeração são
+          copiados para cá. OneDrive, Drive ou pasta de rede servem — aqui é
+          cópia de arquivo, não banco aberto. <strong>Não deixe em branco.</strong>
+        </span>
+      </div>
+    </div>
+
+    <div class="aviso {{ 'aviso-erro' if conflito_maquina else 'aviso-info' }}" style="margin-top:18px">
+      {% if conflito_maquina %}
+        <strong>Este controle de numeração veio de outro computador.</strong>
+        A série {{ config.serie_dps }} foi criada em
+        <span class="mono">{{ conflito_maquina }}</span>, e este computador é
+        <span class="mono">{{ maquina }}</span>. A emissão está bloqueada.
+        <p style="margin:10px 0 0">
+          O caminho normal é <strong>trocar a série acima</strong> para uma que
+          nenhuma outra máquina use. Só assuma o controle se a outra máquina
+          realmente não emite mais nesta série.
+        </p>
+        <div class="acoes">
+          <button class="botao botao-perigo botao-pequeno" type="button"
+                  data-assumir="/configuracao/assumir-maquina"
+                  onclick="return confirm('Assumir o controle da série {{ config.serie_dps }} neste computador? Se a outra máquina continuar emitindo nesta série, os números vão se repetir.')">
+            Assumir o controle nesta máquina
+          </button>
+          <span id="resultado-maquina" class="discreto"></span>
+        </div>
+      {% else %}
+        Este computador é <span class="mono">{{ maquina }}</span> e usa a série
+        <strong>{{ config.serie_dps }}</strong>. Com mais de um laptop emitindo,
+        dê uma série diferente a cada um — <code>nDPS</code> é único por série.
+      {% endif %}
     </div>
   </div>
 
