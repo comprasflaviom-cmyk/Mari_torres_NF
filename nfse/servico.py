@@ -286,6 +286,12 @@ class Emissor:
         ))
 
     def _entregar_por_email(self, linha, opcoes, resposta, arquivos, ao_progredir, contexto) -> str:
+        # Cliente marcado no cadastro para não receber: a nota já está emitida e
+        # arquivada; só não sai e-mail.
+        if not linha.enviar_email:
+            situacao = "e-mail não enviado: cliente marcado para não receber"
+            ao_progredir(EventoProgresso(tipo="detalhe", mensagem=situacao, **contexto))
+            return situacao
         try:
             situacao = enviar_nfse(
                 self.config_email,

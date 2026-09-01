@@ -2,7 +2,14 @@
 {% set pagina_atual = 'historico' %}
 {% block conteudo %}
 <h1>Histórico de notas</h1>
-<p class="subtitulo">Lido diretamente da pasta de notas — o que está aqui é o que existe em disco.</p>
+<p class="subtitulo">
+  Índice das notas emitidas. Ele é reconstruível a partir da pasta de notas —
+  os arquivos em disco é que são a verdade.
+</p>
+
+{% if reconstruido is defined and reconstruido >= 0 %}
+  <div class="aviso aviso-ok"><strong>Histórico reconstruído:</strong> {{ reconstruido }} nota(s) encontrada(s) em disco.</div>
+{% endif %}
 
 <div class="cartao">
   <form method="get" action="/historico" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap">
@@ -12,6 +19,12 @@
     </div>
     <button class="botao botao-principal" type="submit">Buscar</button>
     {% if busca %}<a class="botao" href="/historico">Limpar</a>{% endif %}
+  </form>
+  <form method="post" action="/historico/reconstruir" style="margin-top:14px">
+    <button class="botao botao-pequeno" type="submit"
+            title="Revarre a pasta de notas e refaz este índice">
+      Reconstruir a partir dos arquivos
+    </button>
   </form>
 </div>
 
@@ -26,8 +39,8 @@
       {% for nota in notas %}
       <tr>
         <td class="discreto">{{ nota.emitida_em[:16].replace('T', ' ') if nota.emitida_em else '—' }}</td>
-        <td>{{ nota.tomador }}</td>
-        <td class="mono">{{ nota.documento_tomador }}</td>
+        <td>{{ nota.tomador or '—' }}</td>
+        <td class="mono">{{ nota.documento or '—' }}</td>
         <td class="numerico">{{ nota.valor_servico | moeda }}</td>
         <td class="mono" style="word-break:break-all">{{ nota.chave_acesso or '—' }}</td>
         <td class="discreto mono" style="word-break:break-all">{{ nota.pasta }}</td>

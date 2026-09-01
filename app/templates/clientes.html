@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% set pagina_atual = 'clientes' %}
+{% block conteudo %}
+<h1>Clientes</h1>
+<p class="subtitulo">
+  Duas chaves independentes por cliente:
+  <strong>Ativo</strong> decide se ele entra no faturamento;
+  <strong>Recebe por e-mail</strong> decide se a nota é enviada automaticamente para ele.
+</p>
+
+{% if erro %}<div class="aviso aviso-erro">{{ erro }}</div>{% endif %}
+
+{% if resultado_importacao %}
+  <div class="aviso {{ 'aviso-atencao' if resultado_importacao.erros else 'aviso-ok' }}">
+    <strong>{{ resultado_importacao.criados }} cliente(s) criado(s),
+    {{ resultado_importacao.atualizados }} atualizado(s).</strong>
+    {% if resultado_importacao.erros %}
+      <ul>{% for e in resultado_importacao.erros %}<li>{{ e }}</li>{% endfor %}</ul>
+    {% endif %}
+  </div>
+{% endif %}
+
+<div class="cartao">
+  <div style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap">
+    <form method="get" action="/clientes" style="display:flex; gap:12px; align-items:flex-end; flex:1; min-width:280px">
+      <div class="campo" style="flex:1">
+        <label for="busca">Buscar por nome, CNPJ/CPF ou e-mail</label>
+        <input type="text" id="busca" name="busca" value="{{ busca }}">
+      </div>
+      <div class="campo-caixa" style="padding-bottom:10px">
+        <input type="checkbox" id="apenas_ativos" name="apenas_ativos" value="1"
+               {{ 'checked' if apenas_ativos }} onchange="this.form.submit()">
+        <label for="apenas_ativos" style="font-weight:400">Só ativos</label>
+      </div>
+      <button class="botao" type="submit">Buscar</button>
+    </form>
+    <a class="botao botao-principal" href="/clientes/novo">Novo cliente</a>
+  </div>
+</div>
+
+{% if clientes %}
+<div class="rolagem">
+  <table>
+    <thead>
+      <tr>
+        <th>Cliente</th><th>CNPJ/CPF</th><th>E-mail</th>
+        <th>Ativo</th><th>Recebe por e-mail</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in clientes %}
+      <tr data-documento="{{ c.documento }}" class="{{ '' if c.ativo else 'inativa' }}">
+        <td>
+          <strong>{{ c.razao_social }}</strong>
+          {% if c.cod_municipio %}<br><span class="discreto">{{ c.bairro }} — {{ c.uf }}</span>{% endif %}
+        </td>
+        <td class="mono">{{ c.documento }}</td>
+        <td class="discreto">{{ c.email or '—' }}</td>
+        <td>
+          <button type="button" class="interruptor {{ 'ligado' if c.ativo }}"
+                  data-coluna="ativo" data-valor="{{ '1' if c.ativo else '0' }}"
+                  title="Se desligado, o cliente não entra no faturamento">
+            {{ 'Ativo' if c.ativo else 'Inativo' }}
+          </button>
+        </td>
+        <td>
+          <button type="button" class="interruptor {{ 'ligado' if c.receber_por_email }}"
+                  data-coluna="receber_por_email" data-valor="{{ '1' if c.receber_por_email else '0' }}"
+                  title="Se desligado, a nota é emitida e arquivada, mas não é enviada por e-mail">
+            {{ 'Sim' if c.receber_por_email else 'Não' }}
+          </button>
+        </td>
+        <td><a class="botao botao-pequeno" href="/clientes/editar/{{ c.documento }}">Editar</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="discreto" style="margin-top:12px">{{ clientes | length }} cliente(s).</p>
+{% else %}
+<div class="cartao vazio">
+  <p>{{ 'Nenhum cliente corresponde à busca.' if busca else 'Nenhum cliente cadastrado ainda.' }}</p>
+  <a class="botao botao-principal" href="/clientes/novo">Cadastrar o primeiro</a>
+</div>
+{% endif %}
+
+<div class="cartao">
+  <h2 style="margin-top:0">Levar o cadastro para outro computador</h2>
+  <p class="discreto">
+    Exporte aqui e importe na outra máquina. É manual de propósito: colocar o banco
+    numa pasta sincronizada (OneDrive, Drive) corrompe o arquivo, porque a
+    sincronização copia banco aberto.
+  </p>
+  <div class="acoes" style="margin-top:8px">
+    <a class="botao" href="/clientes/exportar">Exportar cadastro (.json)</a>
+    <form method="post" action="/clientes/importar" enctype="multipart/form-data"
+          style="display:flex; gap:10px; align-items:center">
+      <input type="file" name="arquivo" accept=".json" required style="width:auto">
+      <button class="botao" type="submit">Importar</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

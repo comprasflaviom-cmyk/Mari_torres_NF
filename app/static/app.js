@@ -39,7 +39,40 @@
     });
   });
 
-  /* ---- Tela de emissão ---- */
+  /* ---- Interruptores do cadastro de clientes ---- */
+  document.querySelectorAll(".interruptor").forEach(function (botao) {
+    botao.addEventListener("click", function () {
+      var linha = botao.closest("tr");
+      var coluna = botao.getAttribute("data-coluna");
+      var novoValor = botao.getAttribute("data-valor") === "1" ? "0" : "1";
+
+      var dados = new FormData();
+      dados.append("coluna", coluna);
+      dados.append("valor", novoValor);
+
+      botao.disabled = true;
+      enviar("/clientes/chave/" + linha.getAttribute("data-documento"), dados)
+        .then(function (r) {
+          if (!r.dados.ok) { alert(r.dados.mensagem); return; }
+          botao.setAttribute("data-valor", novoValor);
+          botao.classList.toggle("ligado", novoValor === "1");
+          if (coluna === "ativo") {
+            botao.textContent = novoValor === "1" ? "Ativo" : "Inativo";
+            linha.classList.toggle("inativa", novoValor !== "1");
+          } else {
+            botao.textContent = novoValor === "1" ? "Sim" : "Não";
+          }
+        })
+        .catch(function (erro) { alert("Falha na comunicação: " + erro); })
+        .finally(function () { botao.disabled = false; });
+    });
+  });
+
+  /* ---- Tela de nota avulsa ---- */
+  var btnSimularAvulsa = document.getElementById("btn-simular-avulsa");
+  if (btnSimularAvulsa) { montarAvulsa(); return; }
+
+  /* ---- Tela de emissão em lote ---- */
   var btnSimular = document.getElementById("btn-simular");
   if (!btnSimular) return;
 
@@ -225,5 +258,126 @@
     habilitar(false);
     situacao.textContent = "Lote em andamento...";
     acompanhar();
+  }
+
+  function montarAvulsa() {
+    var cfg = window.EMISSOR_CONFIG || {};
+    var consoleEl = document.getElementById("console");
+    var painel = document.getElementById("painel-progresso");
+    var barra = document.getElementById("barra-preenchida");
+    var situacao = document.getElementById("situacao-avulsa");
+    var cortina = document.getElementById("cortina");
+    var confirmacao = document.getElementById("confirmacao");
+    var btnConfirmar = document.getElementById("btn-confirmar");
+    var seletor = document.getElementById("documento");
+    var fonte = null;
+
+    /* Avisa quando o cliente escolhido está marcado para não receber e-mail:
+       a nota sai normalmente, mas ninguém recebe nada. */
+    seletor.addEventListener("change", function () {
+      var opcao = seletor.selectedOptions[0];
+      var dica = document.getElementById("dica-cliente");
+      if (!opcao || !opcao.value) { dica.textContent = "Só clientes ativos aparecem aqui."; return; }
+      dica.textContent = opcao.getAttribute("data-recebe") === "1"
+        ? "A nota será enviada para " + opcao.getAttribute("data-email") + "."
+        : "Este cliente está marcado para NÃO receber por e-mail. A nota será emitida e arquivada, sem envio.";
+    });
+
+    function escrever(texto, classe) {
+      var linha = document.createElement("div");
+      linha.className = classe || "";
+      linha.textContent = texto;
+      consoleEl.appendChild(linha);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function acompanhar() {
+      painel.hidden = false;
+      consoleEl.innerHTML = "";
+      barra.style.width = "0";
+      if (fonte) fonte.close();
+      fonte = new EventSource("/emitir/eventos");
+      fonte.onmessage = function (e) {
+        var ev = JSON.parse(e.data);
+        if (ev.tipo === "detalhe") return;
+        if (ev.tipo === "fim_linha") {
+          barra.style.width = "100%";
+          escrever(ev.mensagem, ev.situacao === "AUTORIZADA" ? "l-ok"
+            : (ev.situacao === "PULADA" ? "l-fraco" : "l-erro"));
+        } else if (ev.tipo === "encerrado") {
+          situacao.textContent = ev.mensagem;
+          habilitar(true);
+          if (fonte) { fonte.close(); fonte = null; }
+        } else if (ev.tipo === "aviso" || ev.tipo === "erro") {
+          escrever("  " + ev.mensagem, ev.tipo === "erro" ? "l-erro" : "l-atencao");
+        }
+      };
+      fonte.onerror = function () { if (fonte) { fonte.close(); fonte = null; } };
+    }
+
+    function habilitar(ligado) {
+      btnSimularAvulsa.disabled = !ligado;
+      document.getElementById("btn-emitir-avulsa").disabled = !ligado;
+    }
+
+    function disparar(modo, textoConfirmacao) {
+      var dados = new FormData();
+      dados.append("documento", seletor.value);
+      dados.append("competencia", document.getElementById("competencia").value);
+      dados.append("valor", document.getElementById("valor").value);
+      dados.append("descricao", document.getElementById("descricao").value);
+      dados.append("modo", modo);
+      dados.append("confirmacao", textoConfirmacao || "");
+
+      habilitar(false);
+      situacao.textContent = "Iniciando...";
+      enviar("/avulsa/emitir", dados)
+        .then(function (r) {
+          if (!r.dados.ok) {
+            situacao.textContent = r.dados.mensagem || "Não foi possível emitir.";
+            habilitar(true);
+            return;
+          }
+          situacao.textContent = r.dados.dry_run ? "Simulando..." : "Emitindo...";
+          acompanhar();
+        })
+        .catch(function (erro) {
+          situacao.textContent = "Falha na comunicação: " + erro;
+          habilitar(true);
+        });
+    }
+
+    btnSimularAvulsa.addEventListener("click", function () { disparar("simular"); });
+
+    document.getElementById("btn-emitir-avulsa").addEventListener("click", function () {
+      if (!cfg.producao) { disparar("emitir"); return; }
+      var opcao = seletor.selectedOptions[0];
+      document.getElementById("modal-cliente").textContent = opcao ? opcao.textContent : "—";
+      document.getElementById("modal-valor").textContent =
+        "R$ " + (document.getElementById("valor").value || "0,00");
+      document.getElementById("modal-competencia").textContent =
+        document.getElementById("competencia").value;
+      confirmacao.value = "";
+      btnConfirmar.disabled = true;
+      cortina.hidden = false;
+      confirmacao.focus();
+    });
+
+    confirmacao.addEventListener("input", function () {
+      btnConfirmar.disabled =
+        confirmacao.value.trim().toUpperCase() !== cfg.confirmacaoExigida;
+    });
+    btnConfirmar.addEventListener("click", function () {
+      cortina.hidden = true;
+      disparar("emitir", confirmacao.value.trim());
+    });
+    document.getElementById("btn-cancelar").addEventListener("click", function () {
+      cortina.hidden = true;
+    });
+
+    if (cfg.estadoInicial && cfg.estadoInicial.estado === "rodando") {
+      habilitar(false);
+      acompanhar();
+    }
   }
 })();

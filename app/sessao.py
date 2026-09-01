@@ -44,6 +44,11 @@ class LinhaPrevia:
     erro: str = ""
     linha: LinhaFaturamento | None = None
 
+    # Preenchidos a partir do cadastro de clientes, quando houver correspondência.
+    do_cadastro: list[str] = field(default_factory=list)  # campos completados
+    recebe_email: bool = True
+    cliente_ativo: bool | None = None                     # None = não cadastrado
+
     def para_json(self) -> dict:
         return {
             "numero_linha": self.numero_linha,
@@ -54,6 +59,9 @@ class LinhaPrevia:
             "valor": self.valor,
             "descricao": self.descricao,
             "erro": self.erro,
+            "do_cadastro": self.do_cadastro,
+            "recebe_email": self.recebe_email,
+            "cliente_ativo": self.cliente_ativo,
         }
 
 
@@ -140,6 +148,9 @@ class TrabalhoEmissao:
     dry_run: bool = False
     ambiente: str = ""
 
+    # Chamado a cada nota autorizada, para alimentar a tabela de histórico.
+    ao_autorizar: Callable[[dict], None] | None = None
+
     _inscritos: list[queue.Queue] = field(default_factory=list)
     _trava: threading.Lock = field(default_factory=threading.Lock)
     _thread: threading.Thread | None = None
@@ -175,6 +186,7 @@ class TrabalhoEmissao:
         linhas: list[LinhaFaturamento],
         opcoes: OpcoesEmissao,
         ambiente: str,
+        ao_autorizar: Callable[[dict], None] | None = None,
     ) -> None:
         """Dispara o lote numa thread.
 
@@ -193,6 +205,7 @@ class TrabalhoEmissao:
         self.terminado_em = None
         self.dry_run = opcoes.dry_run
         self.ambiente = ambiente
+        self.ao_autorizar = ao_autorizar
 
         self._thread = threading.Thread(
             target=self._executar, args=(montar, linhas, opcoes), daemon=True
@@ -204,9 +217,7 @@ class TrabalhoEmissao:
             emissor = montar()
             # `emitir_lote` espera a tripla de `iterar_faturamento`.
             entrada = [(i, linha, None) for i, linha in enumerate(linhas)]
-            self.relatorio = emissor.emitir_lote(
-                entrada, opcoes, lambda ev: self.publicar(_evento_para_json(ev))
-            )
+            self.relatorio = emissor.emitir_lote(entrada, opcoes, self._ao_progredir)
             self.estado = "concluido"
         except Exception as exc:  # noqa: BLE001
             self.estado = "falhou"
@@ -226,6 +237,22 @@ class TrabalhoEmissao:
                 "estado": self.estado,
             })
             self._encerrar_inscritos()
+
+    def _ao_progredir(self, evento: EventoProgresso) -> None:
+        dados = _evento_para_json(evento)
+        self.publicar(dados)
+
+        # Alimenta o histórico só depois que a nota foi arquivada em disco.
+        if (
+            self.ao_autorizar
+            and evento.tipo == "fim_linha"
+            and evento.situacao == "AUTORIZADA"
+            and evento.registro is not None
+        ):
+            try:
+                self.ao_autorizar(dados["registro"])
+            except Exception:  # noqa: BLE001 — histórico é acessório, nunca derruba o lote
+                traceback.print_exc()
 
     # -- Consumo pelo SSE ---------------------------------------------------
     def transmitir(self) -> Iterator[dict]:

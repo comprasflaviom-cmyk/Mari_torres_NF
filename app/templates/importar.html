@@ -32,7 +32,7 @@
   <table>
     <thead>
       <tr><th>Linha</th><th>Situação</th><th>Cliente</th><th>CNPJ/CPF</th>
-          <th class="numerico">Valor</th><th>E-mail</th><th>Observação</th></tr>
+          <th class="numerico">Valor</th><th>E-mail</th><th>Cadastro</th><th>Observação</th></tr>
     </thead>
     <tbody>
       {% for l in importacao.linhas %}
@@ -46,6 +46,15 @@
         <td class="mono">{{ l.documento or '—' }}</td>
         <td class="numerico">{{ l.valor | moeda if l.valor else '—' }}</td>
         <td class="discreto">{{ l.email or '—' }}</td>
+        <td class="discreto">
+          {% if l.cliente_ativo is none %}
+            <span class="etiqueta etiqueta-neutra">não cadastrado</span>
+          {% else %}
+            {% if not l.cliente_ativo %}<span class="etiqueta etiqueta-atencao">inativo</span>{% endif %}
+            {% if not l.recebe_email %}<span class="etiqueta etiqueta-neutra">sem e-mail</span>{% endif %}
+            {% if l.do_cadastro %}<span class="etiqueta etiqueta-ok">completado</span>{% endif %}
+          {% endif %}
+        </td>
         <td>{{ l.erro or l.descricao }}</td>
       </tr>
       {% endfor %}

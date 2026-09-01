@@ -230,3 +230,44 @@ def test_pdf_indisponivel_nao_invalida_a_nota(
 
     assert registro.situacao == "AUTORIZADA"
     assert any("DANFSe indisponível" in e.mensagem for e in eventos if e.tipo == "aviso")
+
+
+# ---------------------------------------------------------------------------
+# Chave de envio por e-mail vinda do cadastro
+# ---------------------------------------------------------------------------
+def _email_ligado() -> ConfiguracaoEmail:
+    return ConfiguracaoEmail(
+        ativo=True, servidor="smtp.exemplo.com", porta=587, usuario="u", senha="s",
+        remetente_email="eu@exemplo.com", remetente_nome="Eu", usar_starttls=True,
+        copia_oculta=[], destino_teste=None, permitir_homologacao=True,
+        assunto_modelo="NFS-e {chave_curta}", corpo_modelo="Olá {tomador}",
+    )
+
+
+def test_cliente_marcado_para_nao_receber_nao_dispara_email(
+    config, linha, certificado_teste, monkeypatch
+):
+    """A nota é emitida e arquivada normalmente — só não sai e-mail."""
+    enviados = []
+    monkeypatch.setattr("nfse.email_envio._entregar", lambda c, m, d: enviados.append(m))
+
+    linha.enviar_email = False
+    emissor, _ = _montar(config, certificado_teste, _email_ligado(), [_autorizada("CHAVE1")])
+
+    registro = emissor.emitir_uma(linha, OpcoesEmissao(competencia=COMPETENCIA))
+
+    assert registro.situacao == "AUTORIZADA"
+    assert enviados == [], "cliente marcado para não receber não pode receber e-mail"
+    assert "não receber" in registro.email
+
+
+def test_cliente_que_recebe_dispara_o_email(config, linha, certificado_teste, monkeypatch):
+    enviados = []
+    monkeypatch.setattr("nfse.email_envio._entregar", lambda c, m, d: enviados.append(m))
+
+    emissor, _ = _montar(config, certificado_teste, _email_ligado(), [_autorizada("CHAVE1")])
+    registro = emissor.emitir_uma(linha, OpcoesEmissao(competencia=COMPETENCIA))
+
+    assert len(enviados) == 1
+    assert enviados[0]["To"] == linha.email
+    assert "e-mail enviado" in registro.email

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% set pagina_atual = 'avulsa' %}
+{% block conteudo %}
+<h1>Nota avulsa</h1>
+<p class="subtitulo">Uma nota só, digitada na hora, sem passar por planilha.</p>
+
+{% if not clientes %}
+  <div class="cartao vazio">
+    <p>Nenhum cliente ativo no cadastro.</p>
+    <a class="botao botao-principal" href="/clientes/novo">Cadastrar um cliente</a>
+  </div>
+{% else %}
+<div class="cartao">
+  <div class="grade">
+    <div class="campo">
+      <label for="documento">Cliente</label>
+      <select id="documento">
+        <option value="">Selecione...</option>
+        {% for c in clientes %}
+        <option value="{{ c.documento }}" data-email="{{ c.email }}"
+                data-recebe="{{ '1' if c.receber_por_email else '0' }}">
+          {{ c.razao_social }} — {{ c.documento }}
+        </option>
+        {% endfor %}
+      </select>
+      <span class="dica" id="dica-cliente">Só clientes ativos aparecem aqui.</span>
+    </div>
+    <div class="campo">
+      <label for="competencia">Competência</label>
+      <input type="month" id="competencia" value="{{ competencia_padrao }}">
+    </div>
+    <div class="campo">
+      <label for="valor">Valor do serviço (R$)</label>
+      <input type="text" id="valor" inputmode="decimal" placeholder="4.500,00">
+    </div>
+  </div>
+  <div class="campo" style="margin-top:16px">
+    <label for="descricao">Descrição do serviço</label>
+    <textarea id="descricao" placeholder="Consultoria estratégica em processos comerciais."></textarea>
+    <span class="dica">Vai para o campo xDescServ da nota. Até 2000 caracteres.</span>
+  </div>
+
+  <div class="acoes">
+    <button class="botao botao-principal" id="btn-simular-avulsa">Simular (não transmite)</button>
+    <button class="botao {{ 'botao-perigo' if producao else '' }}" id="btn-emitir-avulsa">
+      {{ 'Emitir em PRODUÇÃO' if producao else 'Emitir em homologação' }}
+    </button>
+    <span class="discreto" id="situacao-avulsa"></span>
+  </div>
+</div>
+
+<div class="cartao" id="painel-progresso" hidden>
+  <h2 style="margin-top:0">Andamento</h2>
+  <div class="barra"><div id="barra-preenchida"></div></div>
+  <div class="discreto" id="contador">—</div>
+  <div class="console" id="console"></div>
+</div>
+
+<div class="cortina" id="cortina" hidden>
+  <div class="modal">
+    <h2>Emitir em produção</h2>
+    <p>Esta nota terá <strong>valor fiscal real</strong>. Desfazer exige cancelamento formal.</p>
+    <div class="resumo">
+      <div><span>Cliente</span><strong id="modal-cliente">—</strong></div>
+      <div><span>Valor</span><strong id="modal-valor">R$ 0,00</strong></div>
+      <div><span>Competência</span><strong id="modal-competencia">—</strong></div>
+    </div>
+    <div class="campo">
+      <label for="confirmacao">Digite <span class="mono">EMITIR EM PRODUCAO</span> para liberar</label>
+      <input type="text" id="confirmacao" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="acoes">
+      <button class="botao botao-perigo" id="btn-confirmar" disabled>Emitir agora</button>
+      <button class="botao" id="btn-cancelar">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.EMISSOR_CONFIG = {
+    producao: {{ 'true' if producao else 'false' }},
+    confirmacaoExigida: "EMITIR EM PRODUCAO",
+    estadoInicial: {{ trabalho | tojson }},
+    avulsa: true
+  };
+</script>
+{% endif %}
+{% endblock %}

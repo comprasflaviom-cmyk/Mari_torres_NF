@@ -22,8 +22,10 @@ from nfse import armazenamento_config as ac
 from nfse.certificado import ErroCertificado, carregar_certificado
 from nfse.email_envio import ErroEmail, enviar_nfse
 from nfse.planilha import ErroPlanilha
+from nfse.clientes import completar_com_cadastro
 from nfse.servico import OpcoesEmissao, montar_emissor
 
+from .rotas_clientes import registrar as registrar_rotas_clientes, repositorio_clientes, repositorio_emissoes
 from .seguranca import Guardiao, gravar_cookie, montar_middleware
 from .sessao import ESTADO, LoteEmAndamento, importar_planilha
 
@@ -225,6 +227,8 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
             caminho.unlink(missing_ok=True)
             return pagina(requisicao, "importar.html", importacao=None, erro=str(exc))
 
+        _completar_com_cadastro(ESTADO.importacao)
+
         config = _carregar_config_tolerante()
         config.ultima_planilha = str(caminho)
         ac.salvar(config)
@@ -298,6 +302,7 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
                 linhas=[l.linha for l in escolhidas if l.linha],
                 opcoes=opcoes,
                 ambiente=config.ambiente,
+                ao_autorizar=_registrar_no_historico(config.ambiente),
             )
         except LoteEmAndamento as exc:
             return JSONResponse({"ok": False, "mensagem": str(exc)}, 409)
@@ -326,14 +331,26 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
     # Histórico
     # ------------------------------------------------------------------
     @app.get("/historico", response_class=HTMLResponse)
-    def tela_historico(requisicao: Request, busca: str = ""):
-        config = _carregar_config_tolerante()
+    def tela_historico(requisicao: Request, busca: str = "", reconstruido: int = -1):
         return pagina(
             requisicao, "historico.html",
-            notas=_listar_notas(config.para_configuracao().diretorio_notas, busca),
+            notas=repositorio_emissoes().listar(busca=busca),
             busca=busca,
+            reconstruido=reconstruido,
         )
 
+    @app.post("/historico/reconstruir")
+    def reconstruir_historico():
+        """Refaz a tabela a partir dos arquivos em disco.
+
+        O histórico é um modelo de leitura descartável; os arquivos da pasta de
+        notas é que são a verdade.
+        """
+        config = _carregar_config_tolerante()
+        total = repositorio_emissoes().reconstruir(config.para_configuracao().diretorio_notas)
+        return RedirectResponse(f"/historico?reconstruido={total}", status_code=303)
+
+    registrar_rotas_clientes(app, pagina, _carregar_config_tolerante)
     return app
 
 
@@ -398,25 +415,42 @@ def _situacao_certificado(config: ac.ConfiguracaoApp) -> dict:
     }
 
 
-def _listar_notas(diretorio_notas: Path, busca: str = "") -> list[dict]:
-    """Lê os `*_retorno.json` gravados por `armazenamento.salvar_nota`.
+def _completar_com_cadastro(importacao) -> None:
+    """Preenche endereço e chave de e-mail das linhas a partir do cadastro.
 
-    Enquanto não existe banco de histórico (Fase 3), a própria pasta de notas é
-    a fonte — o que também garante que o histórico nunca discorde dos arquivos.
+    Endereço incompleto do tomador é causa comum de rejeição, e a planilha
+    raramente o traz. O que veio na planilha continua tendo precedência.
     """
-    if not diretorio_notas.exists():
-        return []
-
-    encontradas: list[dict] = []
-    for caminho in sorted(diretorio_notas.rglob("*_retorno.json"), reverse=True):
-        try:
-            dados = json.loads(caminho.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+    repo = repositorio_clientes()
+    for previa in importacao.validas:
+        if previa.linha is None:
             continue
-        if busca:
-            alvo = f"{dados.get('tomador','')} {dados.get('documento_tomador','')} {dados.get('chave_acesso','')}"
-            if busca.lower() not in alvo.lower():
-                continue
-        dados["pasta"] = str(caminho.parent)
-        encontradas.append(dados)
-    return encontradas[:500]
+        cliente = repo.buscar(previa.linha.documento_tomador)
+        if cliente is None:
+            continue
+        _, completados = completar_com_cadastro(previa.linha, cliente)
+        previa.email = previa.linha.email
+        previa.do_cadastro = completados
+        previa.recebe_email = cliente.receber_por_email
+        previa.cliente_ativo = cliente.ativo
+
+
+def _registrar_no_historico(ambiente: str):
+    """Devolve o gancho que grava cada nota autorizada na tabela de histórico."""
+    repo = repositorio_emissoes()
+
+    def registrar(registro: dict) -> None:
+        caminho = Path(registro.get("arquivo_xml") or "")
+        repo.registrar({
+            "chave_acesso": registro.get("chave_acesso"),
+            "documento_tomador": registro.get("documento_tomador", ""),
+            "tomador": registro.get("razao_social", ""),
+            "valor_servico": registro.get("valor_servico", ""),
+            "numero_dps": registro.get("numero_dps", ""),
+            "emitida_em": datetime.now().isoformat(timespec="seconds"),
+            "ambiente": ambiente,
+            "pasta": str(caminho.parent) if caminho.name else "",
+            "arquivos": {"xml": registro.get("arquivo_xml", "")},
+        })
+
+    return registrar

@@ -48,16 +48,20 @@ class LinhaFaturamento:
     descricao: str
     extras: dict[str, str]     # colunas opcionais preenchidas
 
+    # Desligado quando o cliente está marcado no cadastro para não receber a
+    # NFS-e por e-mail. A nota é emitida e arquivada do mesmo jeito.
+    enviar_email: bool = True
+
     @property
     def tipo_documento(self) -> str:
         return "CNPJ" if len(self.documento_tomador) == 14 else "CPF"
 
 
-def _somente_digitos(valor: object) -> str:
+def somente_digitos(valor: object) -> str:
     return re.sub(r"\D", "", str(valor or ""))
 
 
-def _validar_dv_cnpj(cnpj: str) -> bool:
+def validar_dv_cnpj(cnpj: str) -> bool:
     if len(cnpj) != 14 or cnpj == cnpj[0] * 14:
         return False
     for tamanho in (12, 13):
@@ -70,7 +74,7 @@ def _validar_dv_cnpj(cnpj: str) -> bool:
     return True
 
 
-def _validar_dv_cpf(cpf: str) -> bool:
+def validar_dv_cpf(cpf: str) -> bool:
     if len(cpf) != 11 or cpf == cpf[0] * 11:
         return False
     for tamanho in (9, 10):
@@ -122,12 +126,12 @@ def validar_linha(indice: int, linha: pd.Series) -> LinhaFaturamento:
     # +2: pandas indexa a partir de 0 e a linha 1 do Excel é o cabeçalho.
     numero_linha = indice + 2
 
-    documento = _somente_digitos(linha.get("CNPJ_Cliente"))
+    documento = somente_digitos(linha.get("CNPJ_Cliente"))
     if len(documento) == 14:
-        if not _validar_dv_cnpj(documento):
+        if not validar_dv_cnpj(documento):
             raise ValueError(f"CNPJ_Cliente com dígito verificador inválido: {documento}")
     elif len(documento) == 11:
-        if not _validar_dv_cpf(documento):
+        if not validar_dv_cpf(documento):
             raise ValueError(f"CPF do cliente com dígito verificador inválido: {documento}")
     else:
         raise ValueError(

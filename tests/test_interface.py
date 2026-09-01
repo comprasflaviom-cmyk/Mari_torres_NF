@@ -291,3 +291,196 @@ def test_teste_de_certificado_reporta_validade(cliente):
     assert dados["ok"] is True
     assert "EMPRESA TESTE" in dados["titular"]
     assert dados["dias"] > 170
+
+
+# ---------------------------------------------------------------------------
+# Cadastro de clientes pela interface
+# ---------------------------------------------------------------------------
+def _cadastrar(cliente, **campos):
+    dados = {
+        "documento": "11.222.333/0001-81",
+        "razao_social": "Cliente Alfa",
+        "email": "alfa@exemplo.com.br",
+        "cod_municipio": "3304557",
+        "logradouro": "Avenida Rio Branco",
+        "ativo": "on",
+        "receber_por_email": "on",
+    }
+    dados.update(campos)
+    return cliente.post("/clientes", headers={NOME_HEADER: TOKEN}, data=dados,
+                        follow_redirects=False)
+
+
+def test_cadastrar_cliente_pela_tela(cliente):
+    from app.rotas_clientes import repositorio_clientes
+
+    assert _cadastrar(cliente).status_code == 303
+    salvo = repositorio_clientes().buscar("11222333000181")
+    assert salvo.razao_social == "Cliente Alfa"
+    assert salvo.ativo is True and salvo.receber_por_email is True
+
+    assert "Cliente Alfa" in cliente.get("/clientes").text
+
+
+def test_cadastro_invalido_volta_para_o_formulario(cliente):
+    resposta = _cadastrar(cliente, documento="11222333000100")
+    assert resposta.status_code == 200
+    assert "dígito verificador" in resposta.text
+
+
+def test_alternar_as_chaves_pela_lista(cliente):
+    from app.rotas_clientes import repositorio_clientes
+
+    _cadastrar(cliente)
+    resposta = cliente.post(
+        "/clientes/chave/11222333000181",
+        headers={NOME_HEADER: TOKEN},
+        data={"coluna": "receber_por_email", "valor": "0"},
+    )
+    assert resposta.json()["ok"] is True
+
+    salvo = repositorio_clientes().buscar("11222333000181")
+    assert salvo.receber_por_email is False
+    assert salvo.ativo is True, "desligar o e-mail não pode desativar o cliente"
+
+
+def test_ligar_email_sem_endereco_e_recusado(cliente):
+    _cadastrar(cliente, email="", receber_por_email="")
+    resposta = cliente.post(
+        "/clientes/chave/11222333000181",
+        headers={NOME_HEADER: TOKEN},
+        data={"coluna": "receber_por_email", "valor": "1"},
+    )
+    assert resposta.status_code == 400
+    assert "Cadastre um e-mail" in resposta.json()["mensagem"]
+
+
+def test_coluna_nao_alternavel_e_recusada(cliente):
+    """Guarda contra injeção de nome de coluna na consulta SQL."""
+    _cadastrar(cliente)
+    resposta = cliente.post(
+        "/clientes/chave/11222333000181",
+        headers={NOME_HEADER: TOKEN},
+        data={"coluna": "razao_social", "valor": "1"},
+    )
+    assert resposta.status_code == 400
+
+
+def test_exportar_devolve_json_para_download(cliente):
+    _cadastrar(cliente)
+    resposta = cliente.get("/clientes/exportar")
+    assert resposta.status_code == 200
+    assert "attachment" in resposta.headers["content-disposition"]
+    assert resposta.json()[0]["documento"] == "11222333000181"
+
+
+def test_importacao_da_planilha_completa_pelo_cadastro(cliente):
+    """Endereço que falta na planilha vem do cadastro."""
+    _cadastrar(cliente)
+    _importar(cliente)
+
+    previa = ESTADO.importacao.validas[0]
+    assert previa.linha.extras["Logradouro"] == "Avenida Rio Branco"
+    assert previa.cliente_ativo is True
+    assert "Logradouro" in previa.do_cadastro
+
+
+def test_planilha_de_cliente_nao_cadastrado_segue_normal(cliente):
+    _importar(cliente)
+    previa = ESTADO.importacao.validas[0]
+    assert previa.cliente_ativo is None
+    assert previa.do_cadastro == []
+
+
+# ---------------------------------------------------------------------------
+# Nota avulsa
+# ---------------------------------------------------------------------------
+def _avulsa(cliente, **campos):
+    dados = {
+        "documento": "11222333000181",
+        "competencia": "2026-09",
+        "valor": "4.500,00",
+        "descricao": "Consultoria estratégica.",
+        "modo": "simular",
+    }
+    dados.update(campos)
+    return cliente.post("/avulsa/emitir", headers={NOME_HEADER: TOKEN}, data=dados)
+
+
+def test_nota_avulsa_simula_e_gera_o_xml(cliente, dados_app):
+    _cadastrar(cliente)
+    resposta = _avulsa(cliente)
+    assert resposta.status_code == 200
+    assert resposta.json() == {"ok": True, "total": 1, "dry_run": True}
+
+    cliente.get("/emitir/eventos")   # consumir o SSE aguarda o lote terminar
+    simulados = list((dados_app / "notas" / "dry-run").glob("*.xml"))
+    assert len(simulados) == 1
+    assert b"Consultoria" in simulados[0].read_bytes()
+
+
+def test_nota_avulsa_recusa_cliente_inativo(cliente):
+    _cadastrar(cliente, ativo="")
+    resposta = _avulsa(cliente)
+    assert resposta.status_code == 400
+    assert "inativo" in resposta.json()["mensagem"]
+
+
+def test_nota_avulsa_recusa_cliente_desconhecido(cliente):
+    resposta = _avulsa(cliente, documento="11444777000161")
+    assert resposta.status_code == 400
+    assert "Selecione um cliente" in resposta.json()["mensagem"]
+
+
+def test_nota_avulsa_valida_valor_e_descricao(cliente):
+    _cadastrar(cliente)
+    assert "Valor inválido" in _avulsa(cliente, valor="0").json()["mensagem"]
+    assert "Valor inválido" in _avulsa(cliente, valor="abc").json()["mensagem"]
+    assert "Descreva o serviço" in _avulsa(cliente, descricao="  ").json()["mensagem"]
+
+
+def test_nota_avulsa_em_producao_exige_confirmacao(cliente):
+    _cadastrar(cliente)
+    config = ac.carregar()
+    config.ambiente = "producao"
+    ac.salvar(config)
+
+    resposta = _avulsa(cliente, modo="emitir", confirmacao="sim")
+    assert resposta.status_code == 400
+    assert "EMITIR EM PRODUCAO" in resposta.json()["mensagem"]
+
+
+# ---------------------------------------------------------------------------
+# Histórico
+# ---------------------------------------------------------------------------
+def test_historico_reconstroi_a_partir_dos_arquivos(cliente, dados_app):
+    import json as _json
+
+    pasta = dados_app / "notas" / "2026" / "09-setembro"
+    pasta.mkdir(parents=True)
+    (pasta / "CHAVE1_11222333000181_retorno.json").write_text(
+        _json.dumps({
+            "chave_acesso": "CHAVE1", "tomador": "Cliente Alfa",
+            "documento_tomador": "11222333000181", "valor_servico": "1000.00",
+            "emitida_em": "2026-09-01T10:00:00",
+        }),
+        encoding="utf-8",
+    )
+
+    resposta = cliente.post("/historico/reconstruir", headers={NOME_HEADER: TOKEN},
+                            follow_redirects=True)
+    assert resposta.status_code == 200
+    assert "CHAVE1" in resposta.text
+    assert "Cliente Alfa" in resposta.text
+
+
+def test_formulario_funciona_so_com_o_cookie(cliente):
+    """Caminho real do usuário: o cookie SameSite=Strict basta, sem header."""
+    cliente.get(f"/?t={TOKEN}")              # o navegador recebe o cookie aqui
+    resposta = cliente.post(
+        "/clientes",
+        data={"documento": "11222333000181", "razao_social": "Via cookie",
+              "email": "a@b.com.br", "ativo": "on", "receber_por_email": "on"},
+        follow_redirects=False,
+    )
+    assert resposta.status_code == 303, "POST de formulário do próprio app deve passar"

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% set pagina_atual = 'clientes' %}
+{% block conteudo %}
+<h1>{{ 'Editar cliente' if cliente and cliente.criado_em else 'Novo cliente' }}</h1>
+<p class="subtitulo">
+  O endereço preenchido aqui completa automaticamente as linhas da planilha que
+  não o trouxerem — endereço incompleto do tomador é causa comum de rejeição.
+</p>
+
+{% if erro %}<div class="aviso aviso-erro">{{ erro }}</div>{% endif %}
+
+<form method="post" action="/clientes">
+  <div class="cartao">
+    <h2 style="margin-top:0">Identificação</h2>
+    <div class="grade">
+      <div class="campo">
+        <label for="documento">CNPJ ou CPF</label>
+        <input type="text" id="documento" name="documento" required
+               value="{{ cliente.documento if cliente else '' }}"
+               {{ 'readonly' if cliente and cliente.criado_em }}>
+        <span class="dica">
+          {% if cliente and cliente.criado_em %}
+            Não pode ser alterado — é a identidade do cliente no cadastro.
+          {% else %}
+            Com ou sem máscara. O dígito verificador é conferido.
+          {% endif %}
+        </span>
+      </div>
+      <div class="campo">
+        <label for="razao_social">Razão social / Nome</label>
+        <input type="text" id="razao_social" name="razao_social" required
+               value="{{ cliente.razao_social if cliente else '' }}">
+      </div>
+      <div class="campo">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" name="email" value="{{ cliente.email if cliente else '' }}">
+        <span class="dica">Para onde a NFS-e é enviada, se o envio estiver ligado abaixo.</span>
+      </div>
+      <div class="campo">
+        <label for="telefone">Telefone</label>
+        <input type="text" id="telefone" name="telefone" value="{{ cliente.telefone if cliente else '' }}">
+      </div>
+    </div>
+  </div>
+
+  <div class="cartao">
+    <h2 style="margin-top:0">Situação</h2>
+    <div class="campo-caixa">
+      <input type="checkbox" id="ativo" name="ativo" {{ 'checked' if not cliente or cliente.ativo }}>
+      <label for="ativo" style="font-weight:600">
+        Cliente ativo
+        <span class="dica">
+          Desligado, ele some da lista de faturamento e da emissão avulsa.
+          Use ao encerrar contrato.
+        </span>
+      </label>
+    </div>
+    <div class="campo-caixa">
+      <input type="checkbox" id="receber_por_email" name="receber_por_email"
+             {{ 'checked' if not cliente or cliente.receber_por_email }}>
+      <label for="receber_por_email" style="font-weight:600">
+        Receber a NFS-e por e-mail
+        <span class="dica">
+          Desligado, a nota é emitida e arquivada normalmente — só não sai e-mail.
+          Use para o cliente cujo contador busca o arquivo direto.
+        </span>
+      </label>
+    </div>
+  </div>
+
+  <div class="cartao">
+    <h2 style="margin-top:0">Endereço</h2>
+    <div class="grade">
+      <div class="campo">
+        <label for="logradouro">Logradouro</label>
+        <input type="text" id="logradouro" name="logradouro" value="{{ cliente.logradouro if cliente else '' }}">
+      </div>
+      <div class="campo">
+        <label for="numero">Número</label>
+        <input type="text" id="numero" name="numero" value="{{ cliente.numero if cliente else '' }}">
+      </div>
+      <div class="campo">
+        <label for="complemento">Complemento</label>
+        <input type="text" id="complemento" name="complemento" value="{{ cliente.complemento if cliente else '' }}">
+      </div>
+      <div class="campo">
+        <label for="bairro">Bairro</label>
+        <input type="text" id="bairro" name="bairro" value="{{ cliente.bairro if cliente else '' }}">
+      </div>
+      <div class="campo">
+        <label for="cod_municipio">Município (código IBGE)</label>
+        <input type="text" id="cod_municipio" name="cod_municipio" value="{{ cliente.cod_municipio if cliente else '' }}">
+        <span class="dica">7 dígitos. 3304557 = Rio de Janeiro/RJ.</span>
+      </div>
+      <div class="campo">
+        <label for="uf">UF</label>
+        <input type="text" id="uf" name="uf" maxlength="2" value="{{ cliente.uf if cliente else '' }}">
+      </div>
+      <div class="campo">
+        <label for="cep">CEP</label>
+        <input type="text" id="cep" name="cep" value="{{ cliente.cep if cliente else '' }}">
+      </div>
+    </div>
+  </div>
+
+  <div class="cartao">
+    <div class="campo">
+      <label for="observacao">Observações internas</label>
+      <textarea id="observacao" name="observacao">{{ cliente.observacao if cliente else '' }}</textarea>
+      <span class="dica">Não vai para a nota. É anotação sua.</span>
+    </div>
+  </div>
+
+  <div class="acoes">
+    <button class="botao botao-principal" type="submit">Salvar cliente</button>
+    <a class="botao" href="/clientes">Cancelar</a>
+    {% if cliente and cliente.criado_em %}
+      <button class="botao botao-perigo" type="submit" formaction="/clientes/excluir/{{ cliente.documento }}"
+              formnovalidate onclick="return confirm('Excluir {{ cliente.razao_social }} do cadastro?')">
+        Excluir
+      </button>
+    {% endif %}
+  </div>
+</form>
+{% endblock %}

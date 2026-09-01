@@ -154,3 +154,15 @@ td.numerico { text-align: right; font-variant-numeric: tabular-nums; }
 .vazio { text-align: center; color: var(--tinta-suave); padding: 44px 20px; }
 .mono { font-family: "Cascadia Mono", Consolas, monospace; font-size: 13px; }
 .discreto { color: var(--tinta-suave); font-size: 13px; }
+
+/* ---- Interruptor ativo/inativo do cadastro ---- */
+.interruptor {
+  border: 1px solid var(--borda); background: #eceff2; color: var(--tinta-suave);
+  border-radius: 20px; padding: 4px 14px; font: inherit; font-size: 13px;
+  font-weight: 600; cursor: pointer; min-width: 74px;
+}
+.interruptor:hover { border-color: var(--tinta-suave); }
+.interruptor.ligado { background: var(--ok-fraco); color: var(--ok); border-color: #b6dcc5; }
+.interruptor:disabled { opacity: .55; cursor: wait; }
+tr.inativa td { opacity: .6; }
+tr.inativa td:first-child strong { text-decoration: line-through; }
