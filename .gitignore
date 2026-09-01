@@ -1,0 +1,19 @@
+# ---- NUNCA versionar credenciais ou dados fiscais ----
+*.pfx
+*.p12
+*.key
+*.crt
+*.pem
+.env
+
+# Planilhas e notas emitidas
+faturamento.xlsx
+notas/
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
