@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+{% set pagina_atual = 'configuracao' %}
+{% block conteudo %}
+<h1>Configuração</h1>
+<p class="subtitulo">
+  Preenchido uma vez, na instalação. As senhas ficam no cofre do sistema operacional,
+  nunca em arquivo de texto.
+</p>
+
+{% if salvo %}<div class="aviso aviso-ok"><strong>Configuração salva.</strong></div>{% endif %}
+
+{% if pendencias %}
+  <div class="aviso aviso-atencao">
+    <strong>Ainda falta preencher:</strong>
+    <ul>{% for item in pendencias %}<li>{{ item }}</li>{% endfor %}</ul>
+  </div>
+{% endif %}
+
+<form method="post" action="/configuracao" enctype="multipart/form-data">
+
+  <div class="cartao">
+    <h2 style="margin-top:0">Ambiente</h2>
+    <div class="grade">
+      <div class="campo">
+        <label for="ambiente">Ambiente de emissão</label>
+        <select id="ambiente" name="ambiente">
+          <option value="homologacao" {{ 'selected' if config.ambiente == 'homologacao' }}>
+            Homologação — teste, sem valor fiscal
+          </option>
+          <option value="producao" {{ 'selected' if config.ambiente == 'producao' }}>
+            Produção — notas com valor fiscal real
+          </option>
+        </select>
+        <span class="dica">
+          Só mude para produção depois de validar um lote completo em homologação.
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cartao">
+    <h2 style="margin-top:0">Certificado Digital A1</h2>
+    {% if not cofre_ok %}
+      <div class="aviso aviso-atencao">
+        O cofre de senhas do sistema não está disponível nesta máquina; a senha não
+        poderá ser guardada entre sessões.
+      </div>
+    {% endif %}
+    <div class="grade">
+      <div class="campo">
+        <label for="certificado_arquivo">Arquivo do certificado (.pfx ou .p12)</label>
+        <input type="file" id="certificado_arquivo" name="certificado_arquivo" accept=".pfx,.p12">
+        <span class="dica">
+          {% if config.caminho_certificado_pfx %}
+            Já configurado. Envie um arquivo novo só ao renovar o certificado.
+          {% else %}
+            É o arquivo entregue pela sua Autoridade Certificadora.
+          {% endif %}
+          Uma cópia protegida fica na pasta do aplicativo.
+        </span>
+      </div>
+      <div class="campo">
+        <label for="senha_certificado">Senha do certificado</label>
+        <input type="password" id="senha_certificado" name="senha_certificado" autocomplete="new-password"
+               placeholder="{{ 'Já cadastrada — deixe em branco para manter' if tem_senha_certificado else '' }}">
+        <span class="dica">Guardada no cofre do sistema, fora do arquivo de configuração.</span>
+      </div>
+    </div>
+    <div class="acoes">
+      <button class="botao" type="button" data-testar="/configuracao/testar-certificado">
+        Testar certificado
+      </button>
+      <span id="resultado-certificado" class="discreto"></span>
+    </div>
+  </div>
+
+  <div class="cartao">
+    <h2 style="margin-top:0">Prestador (sua empresa)</h2>
+    <div class="grade">
+      <div class="campo">
+        <label for="prestador_cnpj">CNPJ</label>
+        <input type="text" id="prestador_cnpj" name="prestador_cnpj" value="{{ config.prestador_cnpj }}"
+               inputmode="numeric" placeholder="somente números">
+      </div>
+      <div class="campo">
+        <label for="prestador_im">Inscrição Municipal</label>
+        <input type="text" id="prestador_im" name="prestador_im" value="{{ config.prestador_im }}">
+        <span class="dica">Deixe em branco se a sua prefeitura não exigir.</span>
+      </div>
+      <div class="campo">
+        <label for="prestador_cod_municipio">Município de emissão (código IBGE)</label>
+        <input type="text" id="prestador_cod_municipio" name="prestador_cod_municipio"
+               value="{{ config.prestador_cod_municipio }}">
+        <span class="dica">3304557 = Rio de Janeiro/RJ.</span>
+      </div>
+      <div class="campo">
+        <label for="prestador_simples_nacional">Regime do Simples Nacional</label>
+        <select id="prestador_simples_nacional" name="prestador_simples_nacional">
+          <option value="1" {{ 'selected' if config.prestador_simples_nacional == 1 }}>1 — Não optante</option>
+          <option value="2" {{ 'selected' if config.prestador_simples_nacional == 2 }}>2 — Optante MEI</option>
+          <option value="3" {{ 'selected' if config.prestador_simples_nacional == 3 }}>3 — Optante ME/EPP</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="prestador_regime_especial">Regime especial de tributação</label>
+        <select id="prestador_regime_especial" name="prestador_regime_especial">
+          {% for valor, rotulo in [(0,'0 — Nenhum'), (1,'1 — Ato cooperado'), (2,'2 — Estimativa'),
+                                   (3,'3 — Sociedade de profissionais'), (4,'4 — Cooperativa'),
+                                   (5,'5 — MEI'), (6,'6 — ME/EPP do Simples')] %}
+            <option value="{{ valor }}" {{ 'selected' if config.prestador_regime_especial == valor }}>{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <p class="dica" style="margin-top:14px">
+      Regime tributário errado altera o imposto devido. Confirme estes campos com o seu contador.
+    </p>
+  </div>
+
+  <div class="cartao">
+    <h2 style="margin-top:0">Serviço prestado</h2>
+    <div class="grade">
+      <div class="campo">
+        <label for="servico_ctribnac">Código de tributação nacional (cTribNac)</label>
+        <input type="text" id="servico_ctribnac" name="servico_ctribnac" value="{{ config.servico_ctribnac }}">
+        <span class="dica">170101 = consultoria/assessoria (LC 116, subitem 17.01). Confirme o desdobro da sua atividade.</span>
+      </div>
+      <div class="campo">
+        <label for="servico_cod_municipio">Município da prestação (IBGE)</label>
+        <input type="text" id="servico_cod_municipio" name="servico_cod_municipio"
+               value="{{ config.servico_cod_municipio }}">
+      </div>
+      <div class="campo">
+        <label for="servico_trib_issqn">Tributação do ISSQN</label>
+        <select id="servico_trib_issqn" name="servico_trib_issqn">
+          {% for valor, rotulo in [(1,'1 — Operação tributável'), (2,'2 — Exportação'),
+                                   (3,'3 — Não incidência'), (4,'4 — Imunidade')] %}
+            <option value="{{ valor }}" {{ 'selected' if config.servico_trib_issqn == valor }}>{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="campo">
+        <label for="servico_ret_issqn">Retenção do ISSQN</label>
+        <select id="servico_ret_issqn" name="servico_ret_issqn">
+          {% for valor, rotulo in [(1,'1 — Não retido'), (2,'2 — Retido pelo tomador'),
+                                   (3,'3 — Retido pelo intermediário')] %}
+            <option value="{{ valor }}" {{ 'selected' if config.servico_ret_issqn == valor }}>{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="campo">
+        <label for="iss_aliquota">Alíquota do ISS (%)</label>
+        <input type="text" id="iss_aliquota" name="iss_aliquota" value="{{ config.iss_aliquota }}" placeholder="ex.: 2.00">
+        <span class="dica">Deixe em branco se optante do Simples Nacional.</span>
+      </div>
+      <div class="campo">
+        <label for="servico_ind_tot_trib">Totais aproximados de tributos</label>
+        <select id="servico_ind_tot_trib" name="servico_ind_tot_trib">
+          {% for valor, rotulo in [(0,'0 — Não informa'), (1,'1 — Informa valores'), (2,'2 — Sem valor')] %}
+            <option value="{{ valor }}" {{ 'selected' if config.servico_ind_tot_trib == valor }}>{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="cartao">
+    <h2 style="margin-top:0">Numeração e pastas</h2>
+    <div class="grade">
+      <div class="campo">
+        <label for="serie_dps">Série da DPS</label>
+        <input type="text" id="serie_dps" name="serie_dps" value="{{ config.serie_dps }}">
+        <span class="dica">
+          <strong>Cada computador precisa de uma série diferente.</strong>
+          Duas máquinas na mesma série geram numeração repetida.
+        </span>
+      </div>
+      <div class="campo">
+        <label for="numero_dps_inicial">Próximo número livre</label>
+        <input type="number" id="numero_dps_inicial" name="numero_dps_inicial"
+               value="{{ config.numero_dps_inicial }}" min="1">
+        <span class="dica">Se você já emite notas por outro meio, informe o próximo número da série.</span>
+      </div>
+      <div class="campo">
+        <label for="diretorio_notas">Pasta das notas emitidas</label>
+        <input type="text" id="diretorio_notas" name="diretorio_notas" value="{{ config.diretorio_notas }}"
+               placeholder="em branco = pasta do aplicativo">
+      </div>
+      <div class="campo">
+        <label for="diretorio_logs">Pasta de logs e controle</label>
+        <input type="text" id="diretorio_logs" name="diretorio_logs" value="{{ config.diretorio_logs }}"
+               placeholder="em branco = pasta do aplicativo">
+        <span class="dica">Guarda o controle de numeração. Inclua esta pasta no seu backup.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cartao">
+    <h2 style="margin-top:0">Envio automático ao cliente</h2>
+    <div class="campo-caixa" style="margin-bottom:16px">
+      <input type="checkbox" id="email_enviar" name="email_enviar" {{ 'checked' if config.email_enviar }}>
+      <label for="email_enviar" style="font-weight:600">
+        Enviar a nota por e-mail assim que for autorizada
+        <span class="dica">
+          O cliente recebe o PDF (DANFSe) e o XML anexos. Em homologação o envio fica
+          bloqueado, a menos que você libere abaixo.
+        </span>
+      </label>
+    </div>
+    <div class="grade">
+      <div class="campo">
+        <label for="email_smtp_servidor">Servidor SMTP</label>
+        <input type="text" id="email_smtp_servidor" name="email_smtp_servidor" value="{{ config.email_smtp_servidor }}">
+      </div>
+      <div class="campo">
+        <label for="email_smtp_porta">Porta</label>
+        <input type="number" id="email_smtp_porta" name="email_smtp_porta" value="{{ config.email_smtp_porta }}">
+      </div>
+      <div class="campo">
+        <label for="email_smtp_usuario">Usuário SMTP</label>
+        <input type="text" id="email_smtp_usuario" name="email_smtp_usuario" value="{{ config.email_smtp_usuario }}">
+      </div>
+      <div class="campo">
+        <label for="senha_smtp">Senha SMTP</label>
+        <input type="password" id="senha_smtp" name="senha_smtp" autocomplete="new-password"
+               placeholder="{{ 'Já cadastrada — deixe em branco para manter' if tem_senha_smtp else '' }}">
+        <span class="dica">
+          No Gmail/Workspace use uma <strong>Senha de app</strong>, não a senha da conta.
+        </span>
+      </div>
+      <div class="campo">
+        <label for="email_remetente">E-mail remetente</label>
+        <input type="email" id="email_remetente" name="email_remetente" value="{{ config.email_remetente }}">
+      </div>
+      <div class="campo">
+        <label for="email_remetente_nome">Nome do remetente</label>
+        <input type="text" id="email_remetente_nome" name="email_remetente_nome" value="{{ config.email_remetente_nome }}">
+      </div>
+      <div class="campo">
+        <label for="email_bcc">Cópia oculta (separada por vírgula)</label>
+        <input type="text" id="email_bcc" name="email_bcc" value="{{ config.email_bcc | join(', ') }}"
+               placeholder="contador@escritorio.com.br">
+      </div>
+      <div class="campo">
+        <label for="email_teste_destino">Redirecionar todos os e-mails para</label>
+        <input type="email" id="email_teste_destino" name="email_teste_destino" value="{{ config.email_teste_destino }}">
+        <span class="dica">
+          Preenchido, <strong>nenhum cliente recebe nada</strong> — tudo vai para este endereço.
+          Use enquanto valida o modelo da mensagem.
+        </span>
+      </div>
+    </div>
+    <div class="campo-caixa" style="margin-top:16px">
+      <input type="checkbox" id="email_smtp_starttls" name="email_smtp_starttls" {{ 'checked' if config.email_smtp_starttls }}>
+      <label for="email_smtp_starttls" style="font-weight:400">Usar STARTTLS (porta 587). Desmarque para SSL direto (porta 465).</label>
+    </div>
+    <div class="campo-caixa">
+      <input type="checkbox" id="email_permitir_homologacao" name="email_permitir_homologacao"
+             {{ 'checked' if config.email_permitir_homologacao }}>
+      <label for="email_permitir_homologacao" style="font-weight:400">
+        Permitir envio em homologação
+        <span class="dica">Só marque junto com o redirecionamento acima.</span>
+      </label>
+    </div>
+    <div class="grade" style="margin-top:16px">
+      <div class="campo">
+        <label for="email_assunto">Assunto</label>
+        <input type="text" id="email_assunto" name="email_assunto" value="{{ config.email_assunto }}">
+        <span class="dica">Variáveis: {tomador} {competencia} {valor} {chave} {chave_curta} {descricao} {prestador}</span>
+      </div>
+      <div class="campo">
+        <label for="email_corpo">Corpo da mensagem</label>
+        <textarea id="email_corpo" name="email_corpo" placeholder="Em branco usa o modelo padrão.">{{ config.email_corpo }}</textarea>
+      </div>
+    </div>
+    <div class="acoes">
+      <button class="botao" type="button" data-testar="/configuracao/testar-email">Enviar e-mail de teste</button>
+      <span id="resultado-email" class="discreto"></span>
+    </div>
+  </div>
+
+  <div class="acoes">
+    <button class="botao botao-principal" type="submit">Salvar configuração</button>
+    <a class="botao" href="/">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

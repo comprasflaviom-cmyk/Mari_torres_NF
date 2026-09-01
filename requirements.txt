@@ -7,3 +7,9 @@ signxml>=3.2           # assinatura XMLDSig da DPS (enveloped, RSA-SHA1/SHA256)
 lxml>=5.0              # backend XML usado pelo signxml
 python-dotenv>=1.0     # carrega credenciais do arquivo .env (modo linha de comando)
 keyring>=25.0          # guarda as senhas no cofre do sistema (modo interface gráfica)
+
+# --- Interface gráfica (aplicativo instalado no laptop) ---
+fastapi>=0.115         # servidor da interface, rodando só em 127.0.0.1
+uvicorn>=0.32          # servidor ASGI que executa o FastAPI
+jinja2>=3.1            # templates das telas
+python-multipart>=0.0.9  # upload da planilha e do certificado pelo navegador

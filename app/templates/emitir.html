@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% set pagina_atual = 'emitir' %}
+{% block conteudo %}
+<h1>Emitir notas</h1>
+
+{% if not importacao %}
+  <div class="cartao vazio">
+    <p>Nenhuma planilha importada.</p>
+    <a class="botao botao-principal" href="/importar">Importar planilha</a>
+  </div>
+{% else %}
+
+<p class="subtitulo">
+  {{ importacao.nome_arquivo }} — {{ importacao.validas | length }} linha(s) pronta(s),
+  total de R$ {{ importacao.valor_total | moeda }}.
+  {% if importacao.invalidas %}
+    <span class="etiqueta etiqueta-erro">{{ importacao.invalidas | length }} linha(s) com problema serão ignoradas</span>
+  {% endif %}
+</p>
+
+<div class="cartao">
+  <div class="grade">
+    <div class="campo">
+      <label for="competencia">Competência</label>
+      <input type="month" id="competencia" value="{{ competencia_padrao }}">
+      <span class="dica">Mês em que o serviço foi prestado, não o do faturamento.</span>
+    </div>
+    <div class="campo">
+      <label>Opções</label>
+      <div class="campo-caixa">
+        <input type="checkbox" id="sem_pdf">
+        <label for="sem_pdf" style="font-weight:400">Não baixar o PDF (DANFSe)</label>
+      </div>
+      <div class="campo-caixa">
+        <input type="checkbox" id="reemitir">
+        <label for="reemitir" style="font-weight:400">
+          Reemitir linhas já emitidas
+          <span class="dica">Ignora a proteção contra duplicidade. Use com cuidado.</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="acoes">
+    <button class="botao botao-principal" id="btn-simular">Simular (não transmite)</button>
+    <button class="botao {{ 'botao-perigo' if producao else '' }}" id="btn-emitir">
+      {{ 'Emitir em PRODUÇÃO' if producao else 'Emitir em homologação' }}
+    </button>
+    <span class="discreto" id="situacao-lote"></span>
+  </div>
+</div>
+
+<div class="cartao" id="painel-progresso" hidden>
+  <h2 style="margin-top:0">Andamento</h2>
+  <div class="barra"><div id="barra-preenchida"></div></div>
+  <div class="discreto" id="contador">—</div>
+  <div class="console" id="console"></div>
+</div>
+
+<h2>Linhas a emitir</h2>
+<div class="rolagem">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:34px"><input type="checkbox" id="marcar-todas" checked></th>
+        <th>Linha</th><th>Cliente</th><th>CNPJ/CPF</th>
+        <th class="numerico">Valor</th><th>Resultado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in importacao.validas %}
+      <tr data-linha="{{ l.numero_linha }}" data-valor="{{ l.valor }}">
+        <td><input type="checkbox" class="marca-linha" value="{{ l.numero_linha }}" checked></td>
+        <td>{{ l.numero_linha }}</td>
+        <td>{{ l.razao_social }}</td>
+        <td class="mono">{{ l.documento }}</td>
+        <td class="numerico">{{ l.valor | moeda }}</td>
+        <td class="resultado discreto">—</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Trava de produção: exige a frase digitada por extenso -->
+<div class="cortina" id="cortina" hidden>
+  <div class="modal">
+    <h2>Emitir em produção</h2>
+    <p>
+      Estas notas terão <strong>valor fiscal real</strong>. Desfazer exige
+      cancelamento formal, sujeito a prazo e à regra do município.
+    </p>
+    <div class="resumo">
+      <div><span>Notas selecionadas</span><strong id="modal-quantidade">0</strong></div>
+      <div><span>Valor total</span><strong id="modal-valor">R$ 0,00</strong></div>
+      <div><span>Competência</span><strong id="modal-competencia">—</strong></div>
+    </div>
+    <div class="campo">
+      <label for="confirmacao">Digite <span class="mono">{{ confirmacao_exigida }}</span> para liberar</label>
+      <input type="text" id="confirmacao" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="acoes">
+      <button class="botao botao-perigo" id="btn-confirmar" disabled>Emitir agora</button>
+      <button class="botao" id="btn-cancelar">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.EMISSOR_CONFIG = {
+    producao: {{ 'true' if producao else 'false' }},
+    confirmacaoExigida: {{ confirmacao_exigida | tojson }},
+    estadoInicial: {{ trabalho | tojson }}
+  };
+</script>
+{% endif %}
+{% endblock %}

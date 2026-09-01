@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% set pagina_atual = 'historico' %}
+{% block conteudo %}
+<h1>Histórico de notas</h1>
+<p class="subtitulo">Lido diretamente da pasta de notas — o que está aqui é o que existe em disco.</p>
+
+<div class="cartao">
+  <form method="get" action="/historico" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap">
+    <div class="campo" style="flex:1; min-width:240px">
+      <label for="busca">Buscar por cliente, CNPJ ou chave de acesso</label>
+      <input type="text" id="busca" name="busca" value="{{ busca }}">
+    </div>
+    <button class="botao botao-principal" type="submit">Buscar</button>
+    {% if busca %}<a class="botao" href="/historico">Limpar</a>{% endif %}
+  </form>
+</div>
+
+{% if notas %}
+<div class="rolagem">
+  <table>
+    <thead>
+      <tr><th>Emissão</th><th>Cliente</th><th>CNPJ/CPF</th>
+          <th class="numerico">Valor</th><th>Chave de acesso</th><th>Arquivos</th></tr>
+    </thead>
+    <tbody>
+      {% for nota in notas %}
+      <tr>
+        <td class="discreto">{{ nota.emitida_em[:16].replace('T', ' ') if nota.emitida_em else '—' }}</td>
+        <td>{{ nota.tomador }}</td>
+        <td class="mono">{{ nota.documento_tomador }}</td>
+        <td class="numerico">{{ nota.valor_servico | moeda }}</td>
+        <td class="mono" style="word-break:break-all">{{ nota.chave_acesso or '—' }}</td>
+        <td class="discreto mono" style="word-break:break-all">{{ nota.pasta }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="discreto" style="margin-top:12px">{{ notas | length }} nota(s) encontrada(s).</p>
+{% else %}
+<div class="cartao vazio">
+  <p>{{ 'Nenhuma nota corresponde à busca.' if busca else 'Nenhuma nota emitida ainda.' }}</p>
+</div>
+{% endif %}
+{% endblock %}

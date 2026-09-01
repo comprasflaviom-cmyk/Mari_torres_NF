@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Emissor de NFS-e{% endblock %}</title>
+  <link rel="stylesheet" href="/static/estilo.css">
+</head>
+<body>
+  <!-- A faixa de ambiente é permanente e de cor inequívoca: é a defesa
+       principal contra emitir em produção achando que é teste. -->
+  <div class="faixa {{ 'faixa-producao' if producao else 'faixa-homologacao' }}">
+    {% if producao %}
+      <strong>PRODUÇÃO</strong> — as notas emitidas aqui têm valor fiscal real.
+    {% else %}
+      <strong>HOMOLOGAÇÃO</strong> — ambiente de teste. As notas não têm valor fiscal.
+    {% endif %}
+  </div>
+
+  <header class="cabecalho">
+    <div class="marca">Emissor de NFS-e <span class="marca-sub">Nacional</span></div>
+    <nav>
+      <a href="/" class="{{ 'ativo' if pagina_atual == 'painel' }}">Painel</a>
+      <a href="/importar" class="{{ 'ativo' if pagina_atual == 'importar' }}">Importar planilha</a>
+      <a href="/emitir" class="{{ 'ativo' if pagina_atual == 'emitir' }}">Emitir</a>
+      <a href="/historico" class="{{ 'ativo' if pagina_atual == 'historico' }}">Histórico</a>
+      <a href="/configuracao" class="{{ 'ativo' if pagina_atual == 'configuracao' }}">Configuração</a>
+    </nav>
+  </header>
+
+  <main>
+    {% if pendencias and pagina_atual != 'configuracao' %}
+      <div class="aviso aviso-atencao">
+        <strong>Configuração incompleta.</strong>
+        <ul>{% for item in pendencias %}<li>{{ item }}</li>{% endfor %}</ul>
+        <a class="botao botao-pequeno" href="/configuracao">Completar configuração</a>
+      </div>
+    {% endif %}
+    {% block conteudo %}{% endblock %}
+  </main>
+
+  <script>window.EMISSOR_TOKEN = {{ token | tojson }};</script>
+  <script src="/static/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

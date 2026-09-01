@@ -222,6 +222,58 @@ disponíveis: `{tomador}`, `{prestador}`, `{competencia}`, `{descricao}`,
 
 ---
 
+## Interface gráfica (aplicativo no laptop)
+
+Além da linha de comando, o emissor tem uma interface para a pessoa responsável
+operar no dia a dia. Ela roda **no próprio laptop**: sobe um servidor em
+`127.0.0.1` e abre no navegador. O certificado A1 nunca sai da máquina.
+
+```bash
+python -m app                    # abre o navegador automaticamente
+python -m app --sem-navegador    # só sobe o servidor
+python -m app --porta 9000       # porta fixa
+```
+
+A configuração vai para a pasta de dados do usuário — `%APPDATA%\EmissorNFSe`
+no Windows — e **não usa mais o `.env`**. As senhas do certificado e do SMTP
+ficam no cofre de credenciais do sistema (Gerenciador de Credenciais no Windows),
+não em arquivo de texto.
+
+### As quatro telas
+
+| Tela | Para quê |
+|---|---|
+| **Painel** | Ambiente, série da DPS, validade do certificado e situação do e-mail, tudo à vista antes de faturar. |
+| **Importar planilha** | Envia o `.xlsx` e mostra a grade de conferência: linhas válidas em verde, inválidas em vermelho com o motivo exato. **Nada é transmitido nesta tela.** |
+| **Emitir** | Competência, seleção de linhas, botão de simular ao lado do de emitir, barra de progresso e log ao vivo. |
+| **Histórico** | Notas já emitidas, com busca por cliente, CNPJ ou chave de acesso. |
+
+### Travas de segurança
+
+**Contra emitir em produção por engano:**
+- Faixa de cor permanente no topo — verde em homologação, vermelha em produção.
+- Em produção, um modal exige digitar `EMITIR EM PRODUCAO` por extenso, mostrando
+  antes a quantidade de notas e o valor total.
+- O botão **Simular** tem o mesmo destaque do de emitir, e é o primeiro da linha.
+- Dois lotes simultâneos são recusados: numeração de DPS não suporta concorrência.
+
+**Contra abuso do servidor local:**
+- Escuta apenas em `127.0.0.1`. Nunca em `0.0.0.0` — isso exporia o aplicativo à
+  rede local.
+- Toda rota que altera estado exige um token aleatório, gerado a cada
+  inicialização. Sem isso, **qualquer página aberta no navegador conseguiria
+  disparar uma emissão** por CSRF contra o `localhost`.
+- O header `Host` é validado, o que barra ataque de DNS rebinding.
+
+### Uma série de DPS por computador
+
+`nDPS` é único **por série**. Com 2 a 4 laptops emitindo, dê a cada máquina uma
+série diferente (1, 2, 3...) na tela de configuração. Duas máquinas na mesma
+série geram numeração repetida — e número repetido é rejeição na melhor das
+hipóteses.
+
+---
+
 ## O que o script produz
 
 ```

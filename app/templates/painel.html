@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% set pagina_atual = 'painel' %}
+{% block conteudo %}
+<h1>Painel</h1>
+<p class="subtitulo">Situação do emissor antes de você começar a faturar.</p>
+
+<div class="cartoes">
+  <div class="indicador">
+    <div class="rotulo">Ambiente</div>
+    <div class="valor">{{ 'Produção' if producao else 'Homologação' }}</div>
+    <div class="discreto">{{ 'Notas com valor fiscal real.' if producao else 'Notas de teste, sem valor fiscal.' }}</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Série da DPS</div>
+    <div class="valor">{{ config.serie_dps }}</div>
+    <div class="discreto">Cada computador precisa de uma série própria.</div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Certificado A1</div>
+    <div class="valor">{{ certificado.validade if certificado.ok else '—' }}</div>
+    <div class="discreto">
+      {% if certificado.ok %}Vence em {{ certificado.dias }} dias.{% else %}Não configurado.{% endif %}
+    </div>
+  </div>
+  <div class="indicador">
+    <div class="rotulo">Envio por e-mail</div>
+    <div class="valor">{{ 'Ligado' if config.email_enviar else 'Desligado' }}</div>
+    <div class="discreto">
+      {% if config.email_teste_destino %}Redirecionando para {{ config.email_teste_destino }}.
+      {% elif config.email_enviar %}Vai para o e-mail do cliente.
+      {% else %}As notas não serão enviadas.{% endif %}
+    </div>
+  </div>
+</div>
+
+{% if certificado.ok and certificado.alerta %}
+  <div class="aviso aviso-atencao" style="margin-top:18px">
+    <strong>Certificado vence em {{ certificado.dias }} dias</strong> ({{ certificado.validade }}).
+    Providencie a renovação — sem certificado válido a emissão para.
+  </div>
+{% elif not certificado.ok %}
+  <div class="aviso aviso-erro" style="margin-top:18px">
+    <strong>Certificado indisponível.</strong> {{ certificado.mensagem }}
+  </div>
+{% endif %}
+
+{% if not cofre_ok %}
+  <div class="aviso aviso-atencao">
+    <strong>Cofre de senhas do sistema indisponível.</strong>
+    As senhas não puderam ser guardadas com segurança nesta máquina; você precisará
+    informá-las a cada uso. No Windows isso normalmente funciona sem ajuste.
+  </div>
+{% endif %}
+
+<div class="cartao">
+  <h2 style="margin-top:0">Planilha carregada</h2>
+  {% if importacao %}
+    <p>
+      <strong>{{ importacao.nome_arquivo }}</strong> —
+      {{ importacao.validas | length }} linha(s) válida(s),
+      {{ importacao.invalidas | length }} com problema.
+      <span class="discreto">Importada em {{ importacao.importada_em.strftime('%d/%m/%Y às %H:%M') }}.</span>
+    </p>
+    <div class="acoes" style="margin-top:8px">
+      <a class="botao botao-principal" href="/emitir">Ir para a emissão</a>
+      <a class="botao" href="/importar">Trocar planilha</a>
+    </div>
+  {% else %}
+    <p class="discreto">Nenhuma planilha importada nesta sessão.</p>
+    <a class="botao botao-principal" href="/importar">Importar planilha</a>
+  {% endif %}
+</div>
+
+{% if trabalho.estado != 'ocioso' %}
+<div class="cartao">
+  <h2 style="margin-top:0">Último lote</h2>
+  <p>
+    {{ trabalho.resumo or trabalho.erro }}
+    {% if trabalho.dry_run %}<span class="etiqueta etiqueta-neutra">simulação</span>{% endif %}
+  </p>
+  <a class="botao botao-pequeno" href="/emitir">Ver detalhes</a>
+</div>
+{% endif %}
+
+<div class="cartao">
+  <h2 style="margin-top:0">Antes de emitir em produção</h2>
+  <ul class="discreto" style="line-height:1.8">
+    <li>Valide o XML gerado pela <strong>simulação</strong> contra o schema oficial da NFS-e Nacional.</li>
+    <li>Confirme o código de tributação ({{ config.servico_ctribnac }}) e o regime tributário com o seu contador.</li>
+    <li>Rode um lote pequeno em homologação e confira o XML de retorno.</li>
+    <li>Garanta que a pasta de notas e o arquivo de controle de numeração estão sendo copiados para backup.</li>
+  </ul>
+</div>
+{% endblock %}

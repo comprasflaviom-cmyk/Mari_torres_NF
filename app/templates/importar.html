@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% set pagina_atual = 'importar' %}
+{% block conteudo %}
+<h1>Importar planilha</h1>
+<p class="subtitulo">
+  As linhas são conferidas aqui, antes de qualquer transmissão. Nada é enviado nesta tela.
+</p>
+
+{% if erro %}
+  <div class="aviso aviso-erro"><strong>Não foi possível ler a planilha.</strong><br>{{ erro }}</div>
+{% endif %}
+
+<div class="cartao">
+  <form method="post" action="/importar" enctype="multipart/form-data">
+    <div class="campo">
+      <label for="planilha">Arquivo de faturamento (.xlsx)</label>
+      <input type="file" id="planilha" name="planilha" accept=".xlsx,.xlsm" required>
+      <span class="dica">
+        Colunas obrigatórias: CNPJ_Cliente, Razao_Social, Email_Cliente, Valor_Servico, Descricao_Servico.
+        Opcionais que reduzem rejeição: Logradouro, Numero, Complemento, Bairro, Cod_Municipio, UF, CEP, Telefone.
+      </span>
+    </div>
+    <div class="acoes">
+      <button class="botao botao-principal" type="submit">Conferir planilha</button>
+    </div>
+  </form>
+</div>
+
+{% if importacao %}
+<h2>Última importação: {{ importacao.nome_arquivo }}</h2>
+<div class="rolagem">
+  <table>
+    <thead>
+      <tr><th>Linha</th><th>Situação</th><th>Cliente</th><th>CNPJ/CPF</th>
+          <th class="numerico">Valor</th><th>E-mail</th><th>Observação</th></tr>
+    </thead>
+    <tbody>
+      {% for l in importacao.linhas %}
+      <tr class="{{ 'invalida' if not l.valida }}">
+        <td>{{ l.numero_linha }}</td>
+        <td>
+          {% if l.valida %}<span class="etiqueta etiqueta-ok">válida</span>
+          {% else %}<span class="etiqueta etiqueta-erro">inválida</span>{% endif %}
+        </td>
+        <td>{{ l.razao_social or '—' }}</td>
+        <td class="mono">{{ l.documento or '—' }}</td>
+        <td class="numerico">{{ l.valor | moeda if l.valor else '—' }}</td>
+        <td class="discreto">{{ l.email or '—' }}</td>
+        <td>{{ l.erro or l.descricao }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="acoes">
+  <a class="botao botao-principal" href="/emitir">Continuar para a emissão</a>
+</div>
+{% endif %}
+{% endblock %}
