@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+from pathlib import Path
 
 import keyring
 import pandas as pd
@@ -484,3 +485,58 @@ def test_formulario_funciona_so_com_o_cookie(cliente):
         follow_redirects=False,
     )
     assert resposta.status_code == 303, "POST de formulário do próprio app deve passar"
+
+
+def test_configuracao_salva_mesmo_sem_cofre_de_senhas(cliente, monkeypatch):
+    """O defeito era 500 e perda de tudo que a pessoa tinha preenchido."""
+    monkeypatch.setattr(ac, "guardar_senha", lambda chave, senha: False)
+
+    resposta = cliente.post(
+        "/configuracao",
+        headers={NOME_HEADER: TOKEN},
+        data={"prestador_cnpj": "11222333000181", "serie_dps": "7",
+              "senha_certificado": "senha-do-pfx"},
+        follow_redirects=False,
+    )
+
+    assert resposta.status_code == 303
+    assert "senha_volatil" in resposta.headers["location"]
+    assert ac.carregar().serie_dps == "7", "o resto da configuração tem que ser salvo"
+
+
+def test_tela_avisa_que_a_senha_e_so_da_sessao(cliente):
+    pagina = cliente.get("/configuracao?salvo=true&senha_volatil=do%20certificado").text
+    assert "não pôde ser guardada" in pagina
+    assert "do certificado" in pagina
+
+
+def test_upload_do_certificado_pela_tela(cliente, dados_app):
+    """O upload vinha sendo descartado em silêncio por um isinstance errado."""
+    conteudo = (dados_app / "certificado.pfx").read_bytes()
+
+    resposta = cliente.post(
+        "/configuracao",
+        headers={NOME_HEADER: TOKEN},
+        data={"prestador_cnpj": "11222333000181"},
+        files={"certificado_arquivo": ("meu-a1.pfx", conteudo)},
+        follow_redirects=False,
+    )
+
+    assert resposta.status_code == 303
+    caminho = ac.carregar().caminho_certificado_pfx
+    assert caminho, "o caminho do certificado precisa ficar salvo"
+    assert Path(caminho).read_bytes() == conteudo
+    assert ac.carregar().pendencias() == [], "com o certificado, não deve sobrar pendência"
+
+
+def test_configuracao_sem_novo_certificado_mantem_o_atual(cliente):
+    anterior = ac.carregar().caminho_certificado_pfx
+    cliente.post(
+        "/configuracao",
+        headers={NOME_HEADER: TOKEN},
+        data={"prestador_cnpj": "11222333000181", "serie_dps": "9"},
+        follow_redirects=False,
+    )
+    config = ac.carregar()
+    assert config.caminho_certificado_pfx == anterior
+    assert config.serie_dps == "9"

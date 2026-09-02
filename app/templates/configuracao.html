@@ -9,6 +9,17 @@
 
 {% if salvo %}<div class="aviso aviso-ok"><strong>Configuração salva.</strong></div>{% endif %}
 
+{% if senhas_volateis %}
+  <div class="aviso aviso-atencao">
+    <strong>A senha {{ senhas_volateis | join(' e a senha ') }} não pôde ser guardada
+    no cofre do sistema.</strong>
+    O resto da configuração foi salvo normalmente. A senha vale enquanto o
+    aplicativo estiver aberto; ao reabrir, você precisará digitá-la de novo.
+    Em Windows isso costuma funcionar — se persistir, fale com o TI sobre o
+    Gerenciador de Credenciais.
+  </div>
+{% endif %}
+
 {% if pendencias %}
   <div class="aviso aviso-atencao">
     <strong>Ainda falta preencher:</strong>

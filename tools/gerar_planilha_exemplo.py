@@ -22,13 +22,14 @@ LINHAS = [
         "Telefone": "2133334444",
     },
     {
-        "CNPJ_Cliente": "11222333000181",
+        "CNPJ_Cliente": "11444777000161",
         "Razao_Social": "Beta Serviços Empresariais S/A",
         "Email_Cliente": "contas@betaservicos.com.br",
         "Valor_Servico": "R$ 12.750,00",   # o parser aceita o formato brasileiro
         "Descricao_Servico": "Diagnóstico organizacional e plano de reestruturação.",
-        "Cod_Municipio": "3550308",
-        "UF": "SP",
+        # Sem endereço de propósito: é como a planilha de faturamento costuma
+        # vir na prática. O app completa a partir do cadastro do cliente, e a
+        # grade de conferência marca a linha como "completado".
     },
 ]
 

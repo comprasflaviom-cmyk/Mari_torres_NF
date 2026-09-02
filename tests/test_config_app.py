@@ -166,3 +166,59 @@ def test_pendencia_de_certificado_ausente(tmp_path):
 def test_carregar_do_app_recusa_configuracao_incompleta():
     with pytest.raises(ac.ErroConfiguracaoApp, match="Configuração incompleta"):
         ac.carregar_do_app()
+
+
+# ---------------------------------------------------------------------------
+# Cofre indisponível — a degradação que o app promete
+# ---------------------------------------------------------------------------
+class CofreQuebrado(KeyringBackend):
+    """Simula máquina sem cofre: Linux sem Secret Service, Windows travado."""
+
+    priority = 1
+
+    def set_password(self, servico, usuario, senha):
+        raise RuntimeError("No recommended backend was available")
+
+    def get_password(self, servico, usuario):
+        raise RuntimeError("No recommended backend was available")
+
+    def delete_password(self, servico, usuario):
+        raise RuntimeError("No recommended backend was available")
+
+
+@pytest.fixture
+def cofre_quebrado(monkeypatch):
+    anterior = keyring.get_keyring()
+    keyring.set_keyring(CofreQuebrado())
+    ac._SENHAS_DA_SESSAO.clear()
+    yield
+    keyring.set_keyring(anterior)
+    ac._SENHAS_DA_SESSAO.clear()
+
+
+def test_cofre_indisponivel_nao_levanta_erro(cofre_quebrado):
+    """Cofre quebrado não pode derrubar quem está preenchendo a configuração."""
+    assert ac.guardar_senha(ac.CHAVE_SENHA_SMTP, "senha-de-app") is False
+
+
+def test_senha_sobrevive_na_sessao_sem_cofre(cofre_quebrado):
+    ac.guardar_senha(ac.CHAVE_SENHA_CERTIFICADO, "senha-do-pfx")
+    assert ac.ler_senha(ac.CHAVE_SENHA_CERTIFICADO) == "senha-do-pfx"
+
+
+def test_senha_da_sessao_nunca_vai_para_disco(cofre_quebrado, tmp_path):
+    ac.guardar_senha(ac.CHAVE_SENHA_CERTIFICADO, "senha-do-pfx")
+    ac.salvar(_config_valida(tmp_path))
+    assert "senha-do-pfx" not in ac.caminho_config().read_text(encoding="utf-8")
+
+
+def test_cofre_disponivel_devolve_true(ambiente_isolado):
+    assert ac.guardar_senha(ac.CHAVE_SENHA_SMTP, "senha") is True
+
+
+def test_senha_do_cofre_substitui_a_da_sessao(ambiente_isolado):
+    """Ao voltar para uma máquina com cofre, a senha volta a ser persistida."""
+    ac._SENHAS_DA_SESSAO[ac.CHAVE_SENHA_SMTP] = "antiga-da-sessao"
+    assert ac.guardar_senha(ac.CHAVE_SENHA_SMTP, "nova") is True
+    assert ac.CHAVE_SENHA_SMTP not in ac._SENHAS_DA_SESSAO
+    assert ac.ler_senha(ac.CHAVE_SENHA_SMTP) == "nova"

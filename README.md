@@ -45,6 +45,10 @@ atual na Consulta Pública do portal nacional antes de ir para produção.
 
 ---
 
+> **Vai testar pela primeira vez?** Siga o [`TESTE.md`](TESTE.md) — ele leva do
+> zero até a primeira nota real, inclusive como conseguir o Certificado A1 e o
+> que dá para validar antes de ele chegar.
+
 ## Instalação
 
 ```bash
@@ -441,6 +445,9 @@ envio por e-mail.
 ---
 
 ## Antes de emitir em produção — checklist
+
+O passo a passo detalhado está em [`TESTE.md`](TESTE.md), Etapa C.
+
 
 - [ ] XML do `--dry-run` validado contra o `DPS_v1.00.xsd` oficial
 - [ ] `cTribNac` conferido na Consulta de Serviços do portal nacional

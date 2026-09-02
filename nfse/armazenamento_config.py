@@ -84,26 +84,37 @@ def _keyring():
     return keyring
 
 
-def guardar_senha(chave: str, senha: str) -> None:
-    """Grava uma senha no cofre do sistema. Senha vazia remove a entrada."""
-    keyring = _keyring()
+# Guarda de emergência para quando o cofre do sistema não existe (Windows
+# corporativo travado, Linux sem Secret Service). Vive só enquanto o processo
+# roda: fechar o aplicativo apaga, e a pessoa digita de novo na próxima vez.
+# Nunca vai para disco.
+_SENHAS_DA_SESSAO: dict[str, str] = {}
+
+
+def guardar_senha(chave: str, senha: str) -> bool:
+    """Grava uma senha. Senha vazia remove a entrada.
+
+    Devolve **True** se foi para o cofre do sistema e **False** se o cofre não
+    estava disponível e ela ficou apenas em memória, válida por esta sessão.
+    Cofre indisponível não pode derrubar a tela de configuração — a pessoa
+    perderia tudo que preencheu por causa de um detalhe da máquina.
+    """
     if not senha:
         remover_senha(chave)
-        return
+        return True
     try:
-        keyring.set_password(SERVICO_KEYRING, chave, senha)
-    except Exception as exc:  # backend indisponível (Linux headless, por ex.)
-        raise ErroConfiguracaoApp(
-            f"Não foi possível gravar a senha no cofre do sistema: {exc}"
-        ) from exc
+        _keyring().set_password(SERVICO_KEYRING, chave, senha)
+        _SENHAS_DA_SESSAO.pop(chave, None)
+        return True
+    except Exception:
+        _SENHAS_DA_SESSAO[chave] = senha
+        return False
 
 
 def ler_senha(chave: str) -> str | None:
-    """Lê uma senha do cofre. Devolve None se não houver ou se o cofre falhar.
-
-    Falha de cofre não derruba o app: a interface pede a senha na hora e a
-    mantém apenas em memória durante a sessão.
-    """
+    """Lê uma senha. A da sessão tem precedência sobre a do cofre."""
+    if chave in _SENHAS_DA_SESSAO:
+        return _SENHAS_DA_SESSAO[chave]
     try:
         return _keyring().get_password(SERVICO_KEYRING, chave)
     except Exception:
@@ -111,6 +122,7 @@ def ler_senha(chave: str) -> str | None:
 
 
 def remover_senha(chave: str) -> None:
+    _SENHAS_DA_SESSAO.pop(chave, None)
     try:
         _keyring().delete_password(SERVICO_KEYRING, chave)
     except Exception:

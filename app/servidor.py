@@ -15,6 +15,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request, UploadFile
+from starlette.datastructures import UploadFile as ArquivoDeFormulario
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -108,10 +109,11 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
     # Configuração
     # ------------------------------------------------------------------
     @app.get("/configuracao", response_class=HTMLResponse)
-    def tela_configuracao(requisicao: Request, salvo: bool = False):
+    def tela_configuracao(requisicao: Request, salvo: bool = False, senha_volatil: str = ""):
         return pagina(
             requisicao, "configuracao.html",
             salvo=salvo,
+            senhas_volateis=[s for s in senha_volatil.split(",") if s],
             cofre_ok=ac.cofre_disponivel(),
             tem_senha_certificado=bool(ac.ler_senha(ac.CHAVE_SENHA_CERTIFICADO)),
             tem_senha_smtp=bool(ac.ler_senha(ac.CHAVE_SENHA_SMTP)),
@@ -172,17 +174,30 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         # Certificado: o arquivo é copiado para a pasta do aplicativo, com
         # permissão restrita. O navegador não entrega o caminho real do arquivo
         # escolhido, então guardar uma cópia é o único caminho possível aqui.
+        # A checagem é contra o tipo do Starlette, não o do FastAPI: o
+        # `fastapi.UploadFile` é subclasse dele, e o que sai de `form()` é a
+        # classe-pai. Com o tipo errado o isinstance dá False e o upload some
+        # sem erro nenhum.
         enviado = formulario.get("certificado_arquivo")
-        if isinstance(enviado, UploadFile) and enviado.filename:
+        if isinstance(enviado, ArquivoDeFormulario) and enviado.filename:
             config.caminho_certificado_pfx = str(await _guardar_certificado(enviado))
 
         # Senhas nunca entram no config.json — vão para o cofre do sistema.
         # Campo em branco significa "manter a senha atual", não "apagar".
-        _atualizar_senha(ac.CHAVE_SENHA_CERTIFICADO, formulario.get("senha_certificado"))
-        _atualizar_senha(ac.CHAVE_SENHA_SMTP, formulario.get("senha_smtp"))
+        so_na_sessao = [
+            rotulo
+            for chave, campo, rotulo in (
+                (ac.CHAVE_SENHA_CERTIFICADO, "senha_certificado", "do certificado"),
+                (ac.CHAVE_SENHA_SMTP, "senha_smtp", "do e-mail"),
+            )
+            if _atualizar_senha(chave, formulario.get(campo)) is False
+        ]
 
         ac.salvar(config)
-        return RedirectResponse("/configuracao?salvo=true", status_code=303)
+        destino = "/configuracao?salvo=true"
+        if so_na_sessao:
+            destino += "&senha_volatil=" + ",".join(so_na_sessao)
+        return RedirectResponse(destino, status_code=303)
 
     @app.post("/configuracao/assumir-maquina")
     def assumir_maquina():
@@ -427,13 +442,19 @@ def _carregar_config_tolerante() -> ac.ConfiguracaoApp:
         return ac.ConfiguracaoApp()
 
 
-def _atualizar_senha(chave: str, valor) -> None:
-    """Campo em branco mantém a senha atual; texto novo substitui."""
+def _atualizar_senha(chave: str, valor) -> bool | None:
+    """Campo em branco mantém a senha atual; texto novo substitui.
+
+    Devolve None se não havia nada a fazer, True se a senha foi para o cofre do
+    sistema, e False se o cofre não estava disponível e ela vale só nesta
+    sessão — caso em que a tela avisa, em vez de o salvamento inteiro falhar.
+    """
     if valor is None:
-        return
+        return None
     senha = str(valor)
-    if senha.strip():
-        ac.guardar_senha(chave, senha)
+    if not senha.strip():
+        return None
+    return ac.guardar_senha(chave, senha)
 
 
 async def _guardar_certificado(enviado: UploadFile) -> Path:
