@@ -1,0 +1,13 @@
+# Dependências extras para RODAR OS TESTES (não usadas pelo aplicativo em si).
+#
+# O app em produção só precisa de requirements.txt. Isto aqui é só para quem
+# vai desenvolver ou rodar `python -m pytest`.
+-r requirements.txt
+
+pytest>=8.0
+
+# O FastAPI usa o TestClient do Starlette nos testes de app/. Em versões
+# recentes do Starlette, o TestClient passou a exigir o pacote httpx2 (em vez
+# do httpx antigo) — sem ele, a coleta dos testes falha com:
+#   RuntimeError: The starlette.testclient module requires the httpx2 package
+httpx2

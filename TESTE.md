@@ -61,11 +61,15 @@ Prompt novo, rode `.venv\Scripts\activate` antes dos outros comandos.**
 ## A3. Rodar os testes automatizados
 
 ```bat
-pip install pytest
+pip install -r requirements-dev.txt
 python -m pytest tests -q
 ```
 
 - [ ] Termina com `111 passed`
+
+> Se aparecer `RuntimeError: ... requires the httpx2 package`, é porque o
+> `requirements-dev.txt` não foi instalado (ou é uma cópia antiga do projeto,
+> de antes desse arquivo existir) — rode o comando acima e tente de novo.
 
 Isso confirma que o ambiente está inteiro antes de você clicar em qualquer
 coisa. Se falhar aqui, não adianta seguir — o problema é de instalação.
@@ -447,6 +451,7 @@ e sincronização de arquivo aberto corrompe. A pasta de **backup** no OneDrive
 |---|---|---|
 | `python não é reconhecido` | Instalou sem marcar "Add to PATH" | Reinstale o Python marcando a caixa |
 | `pip não é reconhecido` | Esqueceu de ativar o ambiente | Rode `.venv\Scripts\activate` |
+| `RuntimeError: ... requires the httpx2 package` ao rodar os testes | Instalou só `requirements.txt`, sem o `requirements-dev.txt` | Rode `pip install -r requirements-dev.txt` (não afeta o app, só os testes) |
 | Falha no handshake mTLS | Certificado de teste, vencido, revogado, ou sem cadeia ICP-Brasil | Confira em **Testar certificado**. Nunca desative a verificação TLS |
 | Aviso de cofre de senhas indisponível | Máquina sem Gerenciador de Credenciais acessível | O app funciona; a senha vale só na sessão. Fale com o TI |
 | Página com `403` no navegador | Aba antiga, com token de uma sessão anterior | Feche a aba e reabra pelo atalho |

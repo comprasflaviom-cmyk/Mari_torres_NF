@@ -419,7 +419,7 @@ emitida. Linhas repetidas são puladas com a chave da emissão original. O arqui
 ## Testes
 
 ```bash
-pip install pytest
+pip install -r requirements-dev.txt
 python -m pytest tests -q
 ```
 
