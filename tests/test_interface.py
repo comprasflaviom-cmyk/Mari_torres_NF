@@ -294,6 +294,40 @@ def test_teste_de_certificado_reporta_validade(cliente):
     assert dados["dias"] > 170
 
 
+def test_testar_certificado_funciona_antes_de_salvar(cliente, dados_app):
+    """Não pode exigir 'Salvar' primeiro só para poder testar o arquivo escolhido."""
+    config = ac.carregar()
+    config.caminho_certificado_pfx = ""   # nada salvo ainda
+    ac.salvar(config)
+    ac.remover_senha(ac.CHAVE_SENHA_CERTIFICADO)
+
+    conteudo = (dados_app / "certificado.pfx").read_bytes()
+    resposta = cliente.post(
+        "/configuracao/testar-certificado",
+        headers={NOME_HEADER: TOKEN},
+        files={"certificado_arquivo": ("meu-a1.pfx", conteudo)},
+        data={"senha_certificado": "senha123"},
+    )
+
+    dados = resposta.json()
+    assert dados["ok"] is True
+    assert "EMPRESA TESTE" in dados["titular"]
+    # Testar não pode ter salvo nada de permanente.
+    assert ac.carregar().caminho_certificado_pfx == ""
+    assert list((dados_app / "dados").glob("teste-certificado-*.pfx")) == []
+
+
+def test_testar_certificado_sem_nada_da_mensagem_clara(cliente):
+    config = ac.carregar()
+    config.caminho_certificado_pfx = ""
+    ac.salvar(config)
+
+    resposta = cliente.post("/configuracao/testar-certificado", headers={NOME_HEADER: TOKEN})
+    dados = resposta.json()
+    assert dados["ok"] is False
+    assert "Escolha o arquivo" in dados["mensagem"]
+
+
 # ---------------------------------------------------------------------------
 # Cadastro de clientes pela interface
 # ---------------------------------------------------------------------------

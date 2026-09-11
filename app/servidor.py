@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import shutil
 from datetime import date, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from starlette.datastructures import UploadFile as ArquivoDeFormulario
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -221,13 +222,47 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         })
 
     @app.post("/configuracao/testar-certificado")
-    def testar_certificado():
+    async def testar_certificado(
+        certificado_arquivo: UploadFile | None = File(None),
+        senha_certificado: str | None = Form(None),
+    ):
+        """Testa o certificado do formulário, mesmo antes de salvar.
+
+        A pessoa naturalmente quer conferir o certificado escolhido ANTES de
+        decidir salvar — exigir "Salvar" primeiro só para poder testar é o
+        tipo de furo que ela só descobre clicando. Se um arquivo novo veio no
+        formulário, testa ele (numa cópia temporária, apagada ao final, nunca
+        persistida); senão, cai para o que já está salvo.
+        """
         config = _carregar_config_tolerante()
+        config_teste = config.para_configuracao()
+
+        arquivo_temporario: Path | None = None
         try:
-            certificado = carregar_certificado(config.para_configuracao())
-            certificado.validar_vigencia()
-        except ErroCertificado as exc:
-            return JSONResponse({"ok": False, "mensagem": str(exc)})
+            if certificado_arquivo is not None and certificado_arquivo.filename:
+                conteudo = await certificado_arquivo.read()
+                arquivo_temporario = ac.diretorio_dados() / f"teste-certificado-{secrets.token_hex(8)}.pfx"
+                arquivo_temporario.write_bytes(conteudo)
+                config_teste.caminho_pfx = arquivo_temporario
+
+            if senha_certificado:
+                config_teste.senha_pfx = senha_certificado
+
+            if not config_teste.caminho_pfx:
+                return JSONResponse({
+                    "ok": False,
+                    "mensagem": "Escolha o arquivo do certificado (.pfx) antes de testar.",
+                })
+
+            try:
+                certificado = carregar_certificado(config_teste)
+                certificado.validar_vigencia()
+            except ErroCertificado as exc:
+                return JSONResponse({"ok": False, "mensagem": str(exc)})
+        finally:
+            if arquivo_temporario is not None:
+                arquivo_temporario.unlink(missing_ok=True)
+
         return JSONResponse({
             "ok": True,
             "titular": certificado.titular,

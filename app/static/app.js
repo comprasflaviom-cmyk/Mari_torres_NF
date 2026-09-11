@@ -26,7 +26,22 @@
       saida.textContent = "Testando...";
       saida.className = "discreto";
 
-      enviar(destino, new FormData())
+      /* O teste do certificado usa o que está no formulário agora, mesmo sem
+         ter salvo ainda — não faz sentido obrigar "Salvar" só para poder
+         conferir o arquivo escolhido. */
+      var dados = new FormData();
+      if (destino.indexOf("certificado") >= 0) {
+        var campoArquivo = document.getElementById("certificado_arquivo");
+        var campoSenha = document.getElementById("senha_certificado");
+        if (campoArquivo && campoArquivo.files[0]) {
+          dados.append("certificado_arquivo", campoArquivo.files[0]);
+        }
+        if (campoSenha && campoSenha.value) {
+          dados.append("senha_certificado", campoSenha.value);
+        }
+      }
+
+      enviar(destino, dados)
         .then(function (r) {
           saida.textContent = r.dados.mensagem || (r.dados.ok ? "OK" : "Falhou.");
           saida.className = r.dados.ok ? "etiqueta etiqueta-ok" : "etiqueta etiqueta-erro";
