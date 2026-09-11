@@ -47,7 +47,7 @@ ROTA_CONSULTA_CHAVE = "/nfse/{chave}"      # GET   -> consulta NFS-e pela chave
 ROTA_DANFSE = "/danfse/{chave}"            # GET   -> PDF (DANFSe) da nota
 
 VERSAO_APLICATIVO = "1.00"   # verAplic — identificação do seu emissor
-VERSAO_LAYOUT = "1.00"       # atributo versao do elemento <DPS>
+VERSAO_LAYOUT = "1.01"       # atributo versao do elemento <DPS> — aceita "1.00" ou "1.01"
 NAMESPACE_DPS = "http://www.sped.fazenda.gov.br/nfse"
 
 
@@ -83,7 +83,9 @@ class ParametrosServico:
     # com exceções que o seu contador deve validar.
     codigo_municipio_prestacao: str = "3304557"  # Rio de Janeiro/RJ
 
-    # tribISSQN: 1=Operação tributável | 2=Exportação | 3=Não incidência | 4=Imunidade
+    # tribISSQN: 1=Operação tributável | 2=Imunidade | 3=Exportação de serviço | 4=Não incidência
+    # (ordem conferida contra TSTribISSQN do schema oficial v1.01 — não é a
+    # ordem "intuitiva" que se poderia supor; confira antes de mudar o padrão)
     tributacao_issqn: int = 1
     # tpRetISSQN: 1=Não retido | 2=Retido pelo tomador | 3=Retido pelo intermediário
     tipo_retencao_issqn: int = 1

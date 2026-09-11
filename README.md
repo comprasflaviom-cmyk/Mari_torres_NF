@@ -27,7 +27,7 @@ dicionário Python (`nfse/dps.py` → sua "visão JSON", fácil de inspecionar e
 testar) e o serializa no XML exigido, na ordem do schema.
 
 **2. Valide o layout contra o XSD oficial.**
-A ordem e a obrigatoriedade dos campos vêm do `DPS_v1.00.xsd`. Baixe o pacote de
+A ordem e a obrigatoriedade dos campos vêm do `DPS_v1.01.xsd`. Baixe o pacote de
 schemas na área técnica de <https://www.nfse.gov.br/> e valide o XML gerado pelo
 `--dry-run` antes de emitir em produção. Layouts são revisados; se o seu vier em
 versão diferente, ajuste `VERSAO_LAYOUT` em `nfse/config.py`.
@@ -449,7 +449,7 @@ envio por e-mail.
 O passo a passo detalhado está em [`TESTE.md`](TESTE.md), Etapa C.
 
 
-- [ ] XML do `--dry-run` validado contra o `DPS_v1.00.xsd` oficial
+- [ ] XML do `--dry-run` validado contra o `DPS_v1.01.xsd` oficial
 - [ ] `cTribNac` conferido na Consulta de Serviços do portal nacional
 - [ ] Regime tributário (`opSimpNac`, `regEspTrib`) e ISS validados com o contador
 - [ ] Situação do município (Rio de Janeiro) confirmada no portal nacional

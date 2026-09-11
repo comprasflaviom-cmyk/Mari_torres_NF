@@ -11,7 +11,7 @@ from lxml import etree
 
 from nfse.assinatura import assinar_dps, desempacotar_retorno, empacotar_para_envio
 from nfse.config import NAMESPACE_DPS
-from nfse.dps import dps_para_xml, gerar_id_dps, montar_dps
+from nfse.dps import ErroDPS, dps_para_xml, gerar_id_dps, montar_dps
 from nfse.estado import ControleEmissao, impressao_da_linha
 from nfse.planilha import ErroPlanilha, iterar_faturamento
 
@@ -38,11 +38,37 @@ def test_dps_contem_campos_obrigatorios(config, linha):
     assert inf["dCompet"] == "2026-09-01"
 
 
+def test_endereco_completo_gera_bloco_end(config, linha):
+    """CEP, logradouro, número e bairro presentes: end sai completo e na ordem do schema."""
+    dps = montar_dps(config, linha, numero_dps=1, competencia=date(2026, 9, 1))
+    end = dps["infDPS"]["toma"]["end"]
+    assert list(end.keys()) == ["endNac", "xLgr", "nro", "xBairro"]
+    assert end["endNac"] == {"cMun": "3304557", "CEP": "20040901"}
+    assert end["xLgr"] == "Av. Rio Branco"
+
+
+def test_endereco_so_municipio_da_erro_claro(config, linha):
+    """O schema oficial exige CEP/logradouro/número/bairro juntos quando há
+    município — gerar um <end> pela metade seria XML inválido."""
+    linha.extras = {"Cod_Municipio": "3304557"}  # só o município, nada mais
+
+    with pytest.raises(ErroDPS, match="CEP, logradouro, número e bairro"):
+        montar_dps(config, linha, numero_dps=1, competencia=date(2026, 9, 1))
+
+
+def test_endereco_sem_municipio_omite_o_bloco(config, linha):
+    """Sem código de município, o <end> inteiro é opcional — está tudo bem omitir."""
+    linha.extras = {}
+
+    dps = montar_dps(config, linha, numero_dps=1, competencia=date(2026, 9, 1))
+    assert "end" not in dps["infDPS"]["toma"]
+
+
 def test_xml_respeita_a_ordem_do_schema(config, linha):
     xml = dps_para_xml(montar_dps(config, linha, 1))
     raiz = etree.fromstring(xml)
     assert raiz.tag == f"{{{NAMESPACE_DPS}}}DPS"
-    assert raiz.get("versao") == "1.00"
+    assert raiz.get("versao") == "1.01"
 
     inf = raiz.find("n:infDPS", NS)
     tags = [etree.QName(filho).localname for filho in inf]
@@ -50,6 +76,14 @@ def test_xml_respeita_a_ordem_do_schema(config, linha):
         "tpAmb", "dhEmi", "verAplic", "serie", "nDPS", "dCompet",
         "tpEmit", "cLocEmi", "prest", "toma", "serv", "valores",
     ]
+
+    # tribMun é onde já pegamos uma regressão real: pAliq colocado antes de
+    # tpRetISSQN gera XML inválido no schema oficial (TCTribMunicipal exige
+    # tpRetISSQN antes, com pAliq por último, mesmo sendo o único campo cujo
+    # nome sugeriria vir logo após tribISSQN).
+    trib_mun = inf.find("n:valores/n:trib/n:tribMun", NS)
+    tags_trib_mun = [etree.QName(filho).localname for filho in trib_mun]
+    assert tags_trib_mun == ["tribISSQN", "tpRetISSQN", "pAliq"]
 
 
 def test_assinatura_gera_reference_para_o_id(config, linha, certificado_teste):

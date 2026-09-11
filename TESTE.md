@@ -205,11 +205,11 @@ ao lado do de emitir. Clique nele.
 Este é o passo que mais evita rejeição depois.
 
 1. Baixe o pacote de schemas na documentação técnica de
-   <https://www.nfse.gov.br/> e localize o `DPS_v1.00.xsd`
+   <https://www.nfse.gov.br/> e localize o `DPS_v1.01.xsd`
 2. Rode:
 
 ```bat
-python tools\validar_xml.py "notas\dry-run\*.xml" caminho\para\DPS_v1.00.xsd
+python tools\validar_xml.py "notas\dry-run\*.xml" caminho\para\DPS_v1.01.xsd
 ```
 
 - [ ] Todas as linhas saem como `[OK]`
@@ -217,6 +217,13 @@ python tools\validar_xml.py "notas\dry-run\*.xml" caminho\para\DPS_v1.00.xsd
 Se sair `[INVALIDO]`, a ferramenta diz **em que linha e em que campo**. Erro
 aqui é problema de layout ou de configuração — e é muito melhor descobrir
 agora do que na transmissão.
+
+> **Exceção conhecida:** se o erro for no campo `<serie>`, citando um padrão
+> `^0{0,4}\d{1,5}$`, é um **bug do próprio schema oficial 1.01** — em XSD,
+> `^` e `$` são caracteres literais, não início/fim de string, então esse
+> padrão rejeita qualquer valor numérico normal. Confirmado comparando com a
+> versão 1.00 (que não tinha esse `pattern`) e testando isolado. Não há nada
+> para corrigir do nosso lado nesse item específico — pode ignorar só esse.
 
 ## A11. Testar a nota avulsa
 

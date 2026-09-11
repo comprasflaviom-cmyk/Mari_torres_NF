@@ -15,9 +15,16 @@ Ou seja, o JSON é apenas o envelope. Por isso este módulo faz duas coisas:
 2. `dps_para_xml()` serializa esse dicionário no XML do layout, na ordem exata
    exigida pelo `sequence` do schema.
 
->>> VALIDE o XML gerado contra o `DPS_v1.00.xsd` oficial (baixe o pacote de
+>>> VALIDE o XML gerado contra o `DPS_v1.01.xsd` oficial (baixe o pacote de
     schemas em https://www.nfse.gov.br/ , área de documentação técnica) antes de
     ir para produção. A ordem e a obrigatoriedade dos campos vêm do XSD.
+
+    Atenção: o `TSSerieDPS` da versão 1.01 tem um `pattern` com `^...$` que,
+    em XSD (diferente de regex Perl), são caracteres LITERAIS — o padrão
+    rejeita qualquer valor numérico normal. É um bug conhecido do schema
+    oficial (a versão 1.00 não tinha esse pattern), não do código aqui. Se o
+    validador acusar isso em `<serie>`, é esperado — não há o que corrigir
+    do nosso lado.
 """
 
 from __future__ import annotations
@@ -109,12 +116,18 @@ def montar_dps(
     }
 
     # ---- Valores e tributação --------------------------------------------
-    tributacao_municipal: dict[str, Any] = {"tribISSQN": serv.tributacao_issqn}
+    # Ordem conferida contra TCTribMunicipal do schema oficial v1.01: tribISSQN,
+    # depois (todos opcionais) cPaisResult/tpImunidade/exigSusp/BM — que não
+    # usamos aqui —, tpRetISSQN, e só por último pAliq. Colocar pAliq antes de
+    # tpRetISSQN (como uma leitura "natural" sugeriria) gera XML inválido.
+    tributacao_municipal: dict[str, Any] = {
+        "tribISSQN": serv.tributacao_issqn,
+        "tpRetISSQN": serv.tipo_retencao_issqn,
+    }
     if serv.aliquota_iss is not None:
         # Optantes do Simples Nacional normalmente NÃO informam pAliq —
         # deixe ISS_ALIQUOTA vazio no .env nesse caso.
         tributacao_municipal["pAliq"] = f"{serv.aliquota_iss.quantize(Decimal('0.01')):f}"
-    tributacao_municipal["tpRetISSQN"] = serv.tipo_retencao_issqn
 
     bloco_valores = {
         "vServPrest": {"vServ": _valor(linha.valor_servico)},
@@ -145,31 +158,57 @@ def montar_dps(
     }
 
 
+# (coluna da planilha/cadastro, rótulo para mensagem de erro). Conferido
+# contra o TCEndereco/TCEnderNac do schema oficial (esquemas XSD v1.01,
+# tiposComplexos): dentro de `end`, só xCpl tem minOccurs="0" — todos os
+# outros, inclusive CEP dentro de endNac, são obrigatórios em conjunto.
+_CAMPOS_OBRIGATORIOS_ENDERECO = (
+    ("CEP", "CEP"),
+    ("Logradouro", "logradouro"),
+    ("Numero", "número"),
+    ("Bairro", "bairro"),
+)
+
+
+class ErroDPS(ValueError):
+    """A linha não tem dado suficiente para montar uma DPS válida."""
+
+
 def _montar_endereco(linha: LinhaFaturamento) -> dict[str, Any] | None:
     """Endereço do tomador. Só é montado se houver município informado.
 
-    O layout aceita tomador sem endereço completo; se a sua prefeitura recusar,
-    preencha as colunas opcionais na planilha (veja `planilha.COLUNAS_OPCIONAIS`).
+    O schema não permite endereço "pela metade": se o município está
+    presente, CEP, logradouro, número e bairro são todos obrigatórios juntos
+    (só o complemento é opcional). Faltando algum, é melhor recusar aqui —
+    com uma mensagem que diz exatamente o que falta — do que gerar um XML
+    que o schema (ou a própria Sefin) vai rejeitar sem esse contexto.
     """
     extras = linha.extras
     municipio = "".join(c for c in extras.get("Cod_Municipio", "") if c.isdigit())
     if not municipio:
-        return None
+        return None  # sem município: o bloco inteiro é opcional, tudo bem omitir
 
-    endereco_nacional: dict[str, Any] = {"cMun": municipio.zfill(7)}
-    cep = "".join(c for c in extras.get("CEP", "") if c.isdigit())
-    if cep:
-        endereco_nacional["CEP"] = cep.zfill(8)
+    faltando = [
+        rotulo for coluna, rotulo in _CAMPOS_OBRIGATORIOS_ENDERECO
+        if not extras.get(coluna, "").strip()
+    ]
+    if faltando:
+        raise ErroDPS(
+            "Endereço do tomador incompleto: o schema da NFS-e Nacional exige "
+            f"CEP, logradouro, número e bairro juntos quando há município. "
+            f"Falta: {', '.join(faltando)}. Complete o cadastro do cliente ou "
+            "as colunas da planilha antes de emitir."
+        )
 
-    endereco: dict[str, Any] = {"endNac": endereco_nacional}
-    for chave_planilha, tag in (
-        ("Logradouro", "xLgr"),
-        ("Numero", "nro"),
-        ("Complemento", "xCpl"),
-        ("Bairro", "xBairro"),
-    ):
-        if extras.get(chave_planilha):
-            endereco[tag] = extras[chave_planilha]
+    cep = "".join(c for c in extras["CEP"] if c.isdigit())
+    endereco: dict[str, Any] = {
+        "endNac": {"cMun": municipio.zfill(7), "CEP": cep.zfill(8)},
+        "xLgr": extras["Logradouro"],
+        "nro": extras["Numero"],
+    }
+    if extras.get("Complemento"):
+        endereco["xCpl"] = extras["Complemento"]
+    endereco["xBairro"] = extras["Bairro"]
     return endereco
 
 

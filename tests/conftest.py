@@ -83,5 +83,8 @@ def linha() -> LinhaFaturamento:
         email="financeiro@clientealfa.com.br",
         valor_servico=Decimal("4500.00"),
         descricao="Consultoria estratégica em processos comerciais.",
-        extras={"Cod_Municipio": "3304557", "CEP": "20040901", "Logradouro": "Av. Rio Branco", "Numero": "156"},
+        extras={
+            "Cod_Municipio": "3304557", "CEP": "20040901",
+            "Logradouro": "Av. Rio Branco", "Numero": "156", "Bairro": "Centro",
+        },
     )

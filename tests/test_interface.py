@@ -338,6 +338,9 @@ def _cadastrar(cliente, **campos):
         "email": "alfa@exemplo.com.br",
         "cod_municipio": "3304557",
         "logradouro": "Avenida Rio Branco",
+        "numero": "156",
+        "bairro": "Centro",
+        "cep": "20040901",
         "ativo": "on",
         "receber_por_email": "on",
     }

@@ -152,6 +152,26 @@ def test_reemitir_ignora_a_trava(config, linha, certificado_teste, email_desliga
     assert len(cliente.enviados) == 2
 
 
+def test_endereco_incompleto_vira_erro_local_isolado(config, certificado_teste, email_desligado):
+    """Um cliente com só município (sem CEP/logradouro/bairro) não pode gerar
+    um XML tecnicamente inválido nem derrubar o lote — vira ERRO_LOCAL com o
+    motivo exato, e a linha seguinte continua normalmente.
+    """
+    linha_incompleta = _outra_linha(2, "100.00")
+    linha_incompleta.extras = {"Cod_Municipio": "3304557"}  # só o município
+
+    emissor, cliente = _montar(config, certificado_teste, email_desligado, [_autorizada("CHAVE1")])
+    entrada = [(0, linha_incompleta, None), (1, _outra_linha(3, "200.00"), None)]
+
+    relatorio = emissor.emitir_lote(entrada, OpcoesEmissao(competencia=COMPETENCIA))
+
+    situacoes = [r.situacao for r in relatorio.registros]
+    assert situacoes == ["ERRO_LOCAL", "AUTORIZADA"]
+    assert "CEP, logradouro, número e bairro" in relatorio.registros[0].detalhe
+    # Só a segunda linha (endereço completo) chega a transmitir.
+    assert len(cliente.enviados) == 1
+
+
 def test_falha_numa_linha_nao_derruba_o_lote(config, certificado_teste, email_desligado):
     """Linha inválida, rejeitada e autorizada convivem no mesmo relatório."""
     emissor, _ = _montar(
