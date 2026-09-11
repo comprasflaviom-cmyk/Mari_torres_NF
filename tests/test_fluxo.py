@@ -119,6 +119,44 @@ def test_assinatura_nao_usa_prefixo_de_namespace(config, linha, certificado_test
         assert etree.QName(elemento).namespace == NAMESPACE_XMLDSIG
 
 
+def test_assinatura_embute_a_cadeia_do_certificado(config, linha, certificado_teste):
+    """Sem a cadeia até a AC raiz, o validador da Sefin pode não conseguir montar
+    o caminho de certificação — encontrado numa rejeição real ([E0714] "Arquivo
+    enviado com erro na assinatura") assim que o [E1228] de namespace foi
+    corrigido e o certificado real (com cadeia) entrou em cena."""
+    import datetime as dt
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    from nfse.certificado import CertificadoA1
+
+    chave_ac = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    nome_ac = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "AC INTERMEDIARIA DE TESTE")])
+    agora = dt.datetime.now(dt.timezone.utc)
+    certificado_ac = (
+        x509.CertificateBuilder()
+        .subject_name(nome_ac).issuer_name(nome_ac)
+        .public_key(chave_ac.public_key()).serial_number(x509.random_serial_number())
+        .not_valid_before(agora - dt.timedelta(days=1))
+        .not_valid_after(agora + dt.timedelta(days=365))
+        .sign(chave_ac, hashes.SHA256())
+    )
+    com_cadeia = CertificadoA1(
+        certificado=certificado_teste.certificado,
+        chave_privada=certificado_teste.chave_privada,
+        cadeia=[certificado_ac],
+        cert_pem=certificado_teste.cert_pem,
+        chave_pem=certificado_teste.chave_pem,
+    )
+
+    assinado = assinar_dps(dps_para_xml(montar_dps(config, linha, 1)), com_cadeia)
+    raiz = etree.fromstring(assinado)
+    certificados = raiz.findall(".//ds:X509Data/ds:X509Certificate", NS)
+    assert len(certificados) == 2, "titular + cadeia deveriam gerar dois <X509Certificate>"
+
+
 def test_assinatura_confere_apos_reserializar(config, linha, certificado_teste):
     """A árvore da assinatura é montada manualmente (não por uma lib de XMLDSig)
     porque a forma documentada do signxml para namespace sem prefixo gera uma

@@ -119,9 +119,14 @@ def assinar_dps(xml_dps: bytes, cert: CertificadoA1) -> bytes:
     SubElement(sig, _ds("SignatureValue")).text = base64.b64encode(assinatura).decode("ascii")
     key_info = SubElement(sig, _ds("KeyInfo"))
     x509_data = SubElement(key_info, _ds("X509Data"))
-    SubElement(x509_data, _ds("X509Certificate")).text = base64.b64encode(
-        cert.certificado.public_bytes(Encoding.DER)
-    ).decode("ascii")
+    # O certificado do titular primeiro, seguido da cadeia até a AC raiz (se
+    # houver): XMLDSig permite vários <X509Certificate> no mesmo <X509Data>, e
+    # sem a cadeia o validador pode não conseguir montar o caminho de
+    # certificação até uma AC confiável.
+    for certificado in [cert.certificado, *cert.cadeia]:
+        SubElement(x509_data, _ds("X509Certificate")).text = base64.b64encode(
+            certificado.public_bytes(Encoding.DER)
+        ).decode("ascii")
 
     return etree.tostring(raiz, encoding="utf-8", xml_declaration=True)
 
