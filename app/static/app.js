@@ -302,7 +302,19 @@
     var confirmacao = document.getElementById("confirmacao");
     var btnConfirmar = document.getElementById("btn-confirmar");
     var seletor = document.getElementById("documento");
+    var campoValor = document.getElementById("valor");
     var fonte = null;
+
+    /* Máscara de moeda: digita só números, o R$ se forma da direita para a
+       esquerda (como numa maquininha de cartão) — ninguém precisa pensar em
+       onde vai o ponto ou a vírgula. */
+    campoValor.addEventListener("input", function () {
+      var digitos = campoValor.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+      if (!digitos) { campoValor.value = ""; return; }
+      var centavos = digitos.slice(-2).padStart(2, "0");
+      var inteiro = (digitos.slice(0, -2) || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+      campoValor.value = inteiro + "," + centavos;
+    });
 
     /* Avisa quando o cliente escolhido está marcado para não receber e-mail:
        a nota sai normalmente, mas ninguém recebe nada. */
