@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import base64
 from datetime import date
 from decimal import Decimal
 
 import pandas as pd
 import pytest
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
 from lxml import etree
 
-from nfse.assinatura import assinar_dps, desempacotar_retorno, empacotar_para_envio
+from nfse.assinatura import (
+    NAMESPACE_XMLDSIG,
+    assinar_dps,
+    desempacotar_retorno,
+    empacotar_para_envio,
+)
 from nfse.config import NAMESPACE_DPS
 from nfse.dps import ErroDPS, dps_para_xml, gerar_id_dps, montar_dps
 from nfse.estado import ControleEmissao, impressao_da_linha
@@ -96,6 +104,53 @@ def test_assinatura_gera_reference_para_o_id(config, linha, certificado_teste):
     assert referencia is not None, "assinatura sem <Reference>"
     assert referencia.get("URI") == "#" + id_inf
     assert raiz.find(".//ds:X509Certificate", NS) is not None, "certificado não embutido"
+
+
+def test_assinatura_nao_usa_prefixo_de_namespace(config, linha, certificado_teste):
+    """A Sefin Nacional rejeita com [E1228] qualquer <ds:...>: exige xmlns="..."
+    sem prefixo, tanto no <Signature> quanto em seus filhos."""
+    assinado = assinar_dps(dps_para_xml(montar_dps(config, linha, 1)), certificado_teste)
+    assert b"<ds:" not in assinado
+    assert b'xmlns:ds="' not in assinado
+    raiz = etree.fromstring(assinado)
+    assinatura = raiz.find(f".//{{{NAMESPACE_XMLDSIG}}}Signature")
+    assert assinatura is not None
+    for elemento in assinatura.iter():
+        assert etree.QName(elemento).namespace == NAMESPACE_XMLDSIG
+
+
+def test_assinatura_confere_apos_reserializar(config, linha, certificado_teste):
+    """A árvore da assinatura é montada manualmente (não por uma lib de XMLDSig)
+    porque a forma documentada do signxml para namespace sem prefixo gera uma
+    assinatura que não bate mais consigo mesma depois de serializada e
+    reinterpretada. Confere aqui, de ponta a ponta e sem depender de nenhuma
+    lib de assinatura, que o SignedInfo reproduz byte a byte após reparse e que
+    a assinatura RSA e o digest de infDPS conferem de forma independente."""
+    assinado = assinar_dps(dps_para_xml(montar_dps(config, linha, 1)), certificado_teste)
+
+    original = etree.fromstring(assinado)
+    signed_info_original = original.find(f".//{{{NAMESPACE_XMLDSIG}}}SignedInfo")
+    c14n_original = etree.tostring(signed_info_original, method="c14n")
+
+    reparsed = etree.fromstring(etree.tostring(original))
+    signed_info_reparsed = reparsed.find(f".//{{{NAMESPACE_XMLDSIG}}}SignedInfo")
+    assert etree.tostring(signed_info_reparsed, method="c14n") == c14n_original
+
+    inf_dps = reparsed.find(f"{{{NAMESPACE_DPS}}}infDPS")
+    resumo = hashes.Hash(hashes.SHA1())
+    resumo.update(etree.tostring(inf_dps, method="c14n"))
+    digest_calculado = base64.b64encode(resumo.finalize()).decode("ascii")
+    digest_no_xml = reparsed.find(f".//{{{NAMESPACE_XMLDSIG}}}DigestValue").text
+    assert digest_calculado == digest_no_xml
+
+    assinatura_valor = reparsed.find(f".//{{{NAMESPACE_XMLDSIG}}}SignatureValue").text
+    chave_publica = certificado_teste.certificado.public_key()
+    chave_publica.verify(
+        base64.b64decode(assinatura_valor),
+        etree.tostring(signed_info_reparsed, method="c14n"),
+        padding.PKCS1v15(),
+        hashes.SHA1(),
+    )  # levanta InvalidSignature se não bater — a asserção é não ter lançado
 
 
 def test_pacote_gzip_base64_roundtrip(config, linha, certificado_teste):
