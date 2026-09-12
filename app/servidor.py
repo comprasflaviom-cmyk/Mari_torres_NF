@@ -144,6 +144,7 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         config.prestador_im = texto("prestador_im")
         config.prestador_cod_municipio = texto("prestador_cod_municipio", config.prestador_cod_municipio)
         config.prestador_simples_nacional = numero("prestador_simples_nacional", config.prestador_simples_nacional)
+        config.prestador_regime_apuracao_sn = numero("prestador_regime_apuracao_sn", config.prestador_regime_apuracao_sn)
         config.prestador_regime_especial = numero("prestador_regime_especial", config.prestador_regime_especial)
 
         config.servico_ctribnac = texto("servico_ctribnac", config.servico_ctribnac)

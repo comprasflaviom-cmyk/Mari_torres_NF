@@ -48,6 +48,29 @@ def test_dps_contem_campos_obrigatorios(config, linha):
     assert inf["dCompet"] == "2026-09-01"
 
 
+def test_optante_do_simples_declara_o_regime_de_apuracao(config, linha):
+    """Uma NFS-e real da empresa traz "Regime de apuração dos tributos federais e
+    municipal pelo Simples Nacional" — campo `regApTribSN`, que faltava aqui. É
+    opcional no schema (por isso passava despercebido), mas só existe para
+    optante ME/EPP, e a ordem dele no `sequence` é entre os outros dois."""
+    dps = montar_dps(config, linha, numero_dps=1)
+
+    reg_trib = dps["infDPS"]["prest"]["regTrib"]
+    assert list(reg_trib.keys()) == ["opSimpNac", "regApTribSN", "regEspTrib"]
+    assert reg_trib["regApTribSN"] == 1
+
+
+def test_nao_optante_omite_o_regime_de_apuracao(config, linha):
+    """`regApTribSN` só vale para optante ME/EPP — mandar para não optante seria
+    declarar um regime que não se aplica."""
+    from dataclasses import replace
+
+    config.prestador = replace(config.prestador, opcao_simples_nacional=1)
+
+    reg_trib = montar_dps(config, linha, numero_dps=1)["infDPS"]["prest"]["regTrib"]
+    assert list(reg_trib.keys()) == ["opSimpNac", "regEspTrib"]
+
+
 def test_dhEmi_fica_no_passado_com_folga_de_relogio(config, linha):
     """Rejeição real: `[E0008] A data de emissão da DPS não pode ser posterior à
     data do seu processamento`. Quem decide o dhEmi é o relógio desta máquina, e

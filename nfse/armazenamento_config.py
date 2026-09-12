@@ -155,6 +155,7 @@ class ConfiguracaoApp:
     prestador_im: str = ""
     prestador_cod_municipio: str = "3304557"       # Rio de Janeiro/RJ
     prestador_simples_nacional: int = 3
+    prestador_regime_apuracao_sn: int = 1
     prestador_regime_especial: int = 0
 
     # Serviço
@@ -210,6 +211,7 @@ class ConfiguracaoApp:
                 inscricao_municipal=self.prestador_im,
                 codigo_municipio=self.prestador_cod_municipio,
                 opcao_simples_nacional=self.prestador_simples_nacional,
+                regime_apuracao_sn=self.prestador_regime_apuracao_sn,
                 regime_especial=self.prestador_regime_especial,
             ),
             servico=ParametrosServico(

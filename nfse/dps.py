@@ -100,10 +100,14 @@ def montar_dps(
     bloco_prestador: dict[str, Any] = {"CNPJ": prest.cnpj}
     if prest.inscricao_municipal:
         bloco_prestador["IM"] = prest.inscricao_municipal
-    bloco_prestador["regTrib"] = {
-        "opSimpNac": prest.opcao_simples_nacional,
-        "regEspTrib": prest.regime_especial,
-    }
+    # A ordem reproduz o `sequence` do XSD: opSimpNac, regApTribSN, regEspTrib.
+    # O regime de apuração só existe para optante ME/EPP — é o campo que a nota
+    # real da empresa traz como "Regime de apuração dos tributos federais e
+    # municipal pelo Simples Nacional", e que faltava aqui.
+    bloco_prestador["regTrib"] = {"opSimpNac": prest.opcao_simples_nacional}
+    if prest.opcao_simples_nacional == 3:
+        bloco_prestador["regTrib"]["regApTribSN"] = prest.regime_apuracao_sn
+    bloco_prestador["regTrib"]["regEspTrib"] = prest.regime_especial
 
     # ---- Tomador (seu cliente) -------------------------------------------
     # A ordem das chaves reproduz o `sequence` do XSD: identificação, nome,

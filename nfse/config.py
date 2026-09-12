@@ -62,8 +62,14 @@ class Prestador:
     # Regime tributário — confira com o seu contador antes de emitir em produção.
     # opSimpNac: 1=Não optante | 2=Optante MEI | 3=Optante Simples Nacional (ME/EPP)
     opcao_simples_nacional: int = 3
-    # regEspTrib: 0=Nenhum | 1=Ato Coop. | 2=Estimativa | 3=Soc. Profissionais
-    #             4=Cooperativa | 5=MEI | 6=ME/EPP Simples
+    # regApTribSN — só vale para optante ME/EPP (opSimpNac=3), e diz em que regime
+    # os tributos estão, caso a empresa tenha passado de algum sublimite do SN:
+    #   1=federais e municipal pelo SN | 2=federais pelo SN e ISSQN por fora
+    #   3=federais e municipal por fora do SN
+    regime_apuracao_sn: int = 1
+    # regEspTrib: 0=Nenhum | 1=Ato Cooperado | 2=Estimativa | 3=Microempresa Municipal
+    #             4=Notário ou Registrador | 5=Profissional Autônomo
+    #             6=Sociedade de Profissionais | 9=Outros
     regime_especial: int = 0
 
 
@@ -159,6 +165,7 @@ def carregar_configuracao() -> Configuracao:
             inscricao_municipal=os.getenv("PRESTADOR_IM", "").strip(),
             codigo_municipio=os.getenv("PRESTADOR_COD_MUNICIPIO", "3304557").strip(),
             opcao_simples_nacional=int(os.getenv("PRESTADOR_SIMPLES_NACIONAL", "3")),
+            regime_apuracao_sn=int(os.getenv("PRESTADOR_REGIME_APURACAO_SN", "1")),
             regime_especial=int(os.getenv("PRESTADOR_REGIME_ESPECIAL", "0")),
         ),
         servico=ParametrosServico(

@@ -113,11 +113,23 @@
         </select>
       </div>
       <div class="campo">
+        <label for="prestador_regime_apuracao_sn">Apuração pelo Simples Nacional</label>
+        <select id="prestador_regime_apuracao_sn" name="prestador_regime_apuracao_sn">
+          {% for valor, rotulo in [(1,'1 — Federais e municipal pelo SN'),
+                                   (2,'2 — Federais pelo SN, ISSQN por fora'),
+                                   (3,'3 — Federais e municipal por fora do SN')] %}
+            <option value="{{ valor }}" {{ 'selected' if config.prestador_regime_apuracao_sn == valor }}>{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+        <span class="dica">Só vale para optante ME/EPP. Muda se a empresa passou de algum sublimite do Simples.</span>
+      </div>
+      <div class="campo">
         <label for="prestador_regime_especial">Regime especial de tributação</label>
         <select id="prestador_regime_especial" name="prestador_regime_especial">
           {% for valor, rotulo in [(0,'0 — Nenhum'), (1,'1 — Ato cooperado'), (2,'2 — Estimativa'),
-                                   (3,'3 — Sociedade de profissionais'), (4,'4 — Cooperativa'),
-                                   (5,'5 — MEI'), (6,'6 — ME/EPP do Simples')] %}
+                                   (3,'3 — Microempresa municipal'), (4,'4 — Notário ou registrador'),
+                                   (5,'5 — Profissional autônomo'), (6,'6 — Sociedade de profissionais'),
+                                   (9,'9 — Outros')] %}
             <option value="{{ valor }}" {{ 'selected' if config.prestador_regime_especial == valor }}>{{ rotulo }}</option>
           {% endfor %}
         </select>
