@@ -16,7 +16,7 @@ direto na Sefin, usando o mesmo certificado da emissão.
 Uso (com o ambiente virtual ativado, na pasta do projeto):
 
     python tools/consultar_municipio.py
-    python tools/consultar_municipio.py --municipio 3304557 --servico 170101 --competencia 2026-09
+    python tools/consultar_municipio.py --municipio 3304557 --servico 170100
 
 Sem argumentos, usa o que está na Configuração do aplicativo.
 """
@@ -26,7 +26,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -84,7 +83,7 @@ def bases_candidatas(config) -> list[str]:
 def descobrir_base(sessao, config, municipio: str) -> str | None:
     """Devolve a primeira base que responde à consulta de convênio."""
     sonda = ROTAS["Convênio do município com o Sistema Nacional"].format(
-        municipio=municipio, servico="", competencia=""
+        municipio=municipio, servico=""
     )
     for base in bases_candidatas(config):
         try:
@@ -102,7 +101,6 @@ def main() -> int:
     analisador = argparse.ArgumentParser(description=__doc__)
     analisador.add_argument("--municipio", help="código IBGE de 7 dígitos")
     analisador.add_argument("--servico", help="código de tributação nacional (cTribNac)")
-    analisador.add_argument("--competencia", help="AAAA-MM")
     analisador.add_argument(
         "--base",
         help="URL base da API de parametrização, se ela não for a mesma da emissão",
@@ -117,12 +115,10 @@ def main() -> int:
 
     municipio = argumentos.municipio or config.servico.codigo_municipio_prestacao
     servico = argumentos.servico or config.servico.codigo_tributacao_nacional
-    competencia = argumentos.competencia or date.today().strftime("%Y-%m")
 
     print(f"Ambiente ...: {config.ambiente}")
     print(f"Município ..: {municipio}")
     print(f"Serviço ....: {servico}")
-    print(f"Competência : {competencia}")
     print()
 
     try:
@@ -154,7 +150,7 @@ def main() -> int:
     nao_encontrado = False
     houve_falha = False
     for titulo, molde in ROTAS.items():
-        rota = molde.format(municipio=municipio, servico=servico, competencia=competencia)
+        rota = molde.format(municipio=municipio, servico=servico)
         try:
             status, corpo = consultar(sessao, base, rota, config.timeout_segundos)
         except Exception as exc:  # noqa: BLE001 — rede/TLS vira aviso, não traceback
