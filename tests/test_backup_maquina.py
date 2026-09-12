@@ -171,6 +171,9 @@ class _CertificadoFalso:
     def validar_vigencia(self):
         return None
 
+    def validar_titular(self, cnpj_prestador):
+        return None
+
 
 def _email_desligado():
     from nfse.email_envio import ConfiguracaoEmail

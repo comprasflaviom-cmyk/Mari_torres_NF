@@ -383,7 +383,17 @@ comuns:
 | Endereço ou município do tomador | Cadastro do cliente, ou colunas da planilha |
 | Inscrição municipal | Configuração → Prestador |
 | Certificado / assinatura | Certificado errado, vencido, ou ainda o de teste |
+| `[E0714] Arquivo enviado com erro na assinatura` | Quase sempre **certificado de outro CNPJ**, não defeito na assinatura — veja abaixo |
 | Regime tributário | Configuração → Prestador (confirme com o contador) |
+
+> **Sobre o `E0714`.** A Sefin usa essa mesma mensagem quando a assinatura está
+> tecnicamente perfeita mas **quem assinou não é o prestador declarado na nota**
+> — situação comum em grupo com mais de uma empresa, quando se pega o A1 errado.
+> Como a mensagem fala em assinatura, é fácil perder horas procurando defeito no
+> lugar errado. Por isso o app agora confere isso antes de transmitir: se o CNPJ
+> do certificado não bater com o CNPJ do prestador, ele avisa na hora, dizendo os
+> dois CNPJs. A saída é usar o A1 da empresa que emite, ou corrigir o CNPJ em
+> Configuração.
 
 Rejeição **não consome numeração** — corrija e emita de novo sem se preocupar
 com o número.

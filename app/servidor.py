@@ -257,6 +257,10 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
             try:
                 certificado = carregar_certificado(config_teste)
                 certificado.validar_vigencia()
+                # Certificado de outro CNPJ passa em tudo aqui e só é recusado
+                # lá na Sefin, com uma mensagem que fala em assinatura. Melhor
+                # dizer agora.
+                certificado.validar_titular(config_teste.prestador.cnpj)
             except ErroCertificado as exc:
                 return JSONResponse({"ok": False, "mensagem": str(exc)})
         finally:
@@ -266,10 +270,12 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         return JSONResponse({
             "ok": True,
             "titular": certificado.titular,
+            "cnpj_titular": certificado.cnpj_titular,
             "validade": certificado.valido_ate.strftime("%d/%m/%Y"),
             "dias": certificado.dias_para_vencer,
             "mensagem": (
-                f"Certificado válido até {certificado.valido_ate:%d/%m/%Y} "
+                f"Certificado de {certificado.cnpj_titular or 'CNPJ não identificado'}, "
+                f"válido até {certificado.valido_ate:%d/%m/%Y} "
                 f"({certificado.dias_para_vencer} dias)."
             ),
         })

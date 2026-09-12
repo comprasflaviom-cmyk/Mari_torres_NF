@@ -362,6 +362,7 @@ def montar_emissor(
     """
     certificado = carregar_certificado(config)
     certificado.validar_vigencia()
+    certificado.validar_titular(config.prestador.cnpj)
     cliente = ClienteNFSe(config, criar_sessao_mtls(certificado))
     controle = ControleEmissao.carregar(
         config.diretorio_logs, config.ambiente, config.serie_dps, config.numero_dps_inicial

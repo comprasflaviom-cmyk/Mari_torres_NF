@@ -24,9 +24,13 @@ from pathlib import Path
 import requests
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.serialization import pkcs12
-from cryptography.x509 import Certificate
+from cryptography.x509 import Certificate, ExtensionNotFound, OtherName
+from cryptography.x509.oid import ExtensionOID
 
 from .config import Configuracao
+
+# OID do CNPJ do titular dentro do subjectAltName de um e-CNPJ ICP-Brasil.
+OID_CNPJ_ICP_BRASIL = "2.16.76.1.3.3"
 
 
 class ErroCertificado(RuntimeError):
@@ -50,6 +54,41 @@ class CertificadoA1:
         return self.certificado.subject.rfc4514_string()
 
     @property
+    def cnpj_titular(self) -> str:
+        """CNPJ do dono do certificado, só dígitos (vazio se não for um e-CNPJ).
+
+        Existe porque a Sefin Nacional recusa a nota quando quem assinou não é
+        o prestador declarado — e o erro que ela devolve é um genérico
+        `[E0714] Arquivo enviado com erro na assinatura`, que manda procurar
+        defeito na assinatura em vez de no titular do certificado.
+
+        Num e-CNPJ ICP-Brasil o CNPJ vem no `otherName` de OID 2.16.76.1.3.3
+        do subjectAltName; o sufixo do CN (`RAZAO SOCIAL:00000000000000`) é
+        só o plano B, para certificados que fujam do padrão.
+        """
+        try:
+            alternativos = self.certificado.extensions.get_extension_for_oid(
+                ExtensionOID.SUBJECT_ALTERNATIVE_NAME
+            ).value
+        except ExtensionNotFound:
+            alternativos = []
+
+        for nome in alternativos:
+            if isinstance(nome, OtherName) and nome.type_id.dotted_string == OID_CNPJ_ICP_BRASIL:
+                # O valor é um DER de string; os dois primeiros bytes são tag e
+                # tamanho, e o resto são os 14 dígitos.
+                digitos = "".join(c for c in nome.value[2:].decode("latin-1") if c.isdigit())
+                if len(digitos) == 14:
+                    return digitos
+
+        _, separador, sufixo = self.titular.partition("CN=")
+        if separador:
+            candidato = "".join(c for c in sufixo.split(",")[0].rpartition(":")[2] if c.isdigit())
+            if len(candidato) == 14:
+                return candidato
+        return ""
+
+    @property
     def valido_ate(self) -> datetime:
         return self.certificado.not_valid_after_utc
 
@@ -67,6 +106,26 @@ class CertificadoA1:
             raise ErroCertificado(
                 f"Certificado VENCIDO em {self.valido_ate:%d/%m/%Y}. Renove antes de emitir."
             )
+
+    def validar_titular(self, cnpj_prestador: str) -> None:
+        """Confere se quem assina é o prestador que vai na nota.
+
+        A Sefin Nacional recusa a nota quando o titular do certificado não é o
+        prestador declarado, e o erro é o genérico `[E0714] Arquivo enviado
+        com erro na assinatura` — que aponta para a assinatura, não para o
+        titular. Custa caro descobrir isso pelo retorno do governo, então a
+        checagem acontece aqui, antes de transmitir.
+        """
+        esperado = "".join(c for c in cnpj_prestador if c.isdigit())
+        titular = self.cnpj_titular
+        if not esperado or not titular or titular == esperado:
+            return
+        raise ErroCertificado(
+            f"O certificado é de outro CNPJ. Ele pertence a {titular}, e a nota "
+            f"declara o prestador {esperado}. A Sefin recusa a nota nesse caso "
+            "(erro E0714, que fala em 'erro na assinatura'). Use o certificado "
+            "do próprio prestador, ou corrija o CNPJ em Configuração."
+        )
 
     def impressao_digital(self) -> str:
         return self.certificado.fingerprint(hashes.SHA1()).hex().upper()
