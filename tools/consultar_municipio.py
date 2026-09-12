@@ -42,8 +42,7 @@ from nfse.certificado import (  # noqa: E402
 # usadas na emissão, por isso moram aqui e não em `nfse/config.py`.
 ROTAS = {
     "Convênio do município com o Sistema Nacional": "/parametros_municipais/{municipio}/convenio",
-    "Serviço na competência": "/parametros_municipais/{municipio}/{servico}/{competencia}",
-    "Alíquota do serviço": "/parametros_municipais/{municipio}/{servico}/aliquota/{competencia}",
+    "Alíquotas e regimes do serviço": "/parametros_municipais/{municipio}/{servico}",
 }
 
 
@@ -60,6 +59,10 @@ def main() -> int:
     analisador.add_argument("--municipio", help="código IBGE de 7 dígitos")
     analisador.add_argument("--servico", help="código de tributação nacional (cTribNac)")
     analisador.add_argument("--competencia", help="AAAA-MM")
+    analisador.add_argument(
+        "--base",
+        help="URL base da API de parametrização, se ela não for a mesma da emissão",
+    )
     argumentos = analisador.parse_args()
 
     try:
@@ -86,11 +89,16 @@ def main() -> int:
         print(f"Certificado: {exc}")
         return 1
 
+    base = argumentos.base or config.url_base
+    print(f"API ........: {base}")
+    print()
+
+    nao_encontrado = False
     houve_falha = False
     for titulo, molde in ROTAS.items():
         rota = molde.format(municipio=municipio, servico=servico, competencia=competencia)
         try:
-            status, corpo = consultar(sessao, config.url_base, rota, config.timeout_segundos)
+            status, corpo = consultar(sessao, base, rota, config.timeout_segundos)
         except Exception as exc:  # noqa: BLE001 — rede/TLS vira aviso, não traceback
             print(f"[FALHOU] {titulo}\n         {exc}\n")
             houve_falha = True
@@ -99,18 +107,31 @@ def main() -> int:
         marca = "OK" if status == 200 else f"HTTP {status}"
         print(f"[{marca}] {titulo}")
         print(f"         {rota}")
-        texto = json.dumps(corpo, ensure_ascii=False, indent=2) if isinstance(corpo, (dict, list)) else str(corpo)
-        for linha in texto.splitlines():
-            print(f"         {linha}")
+        # Página de erro do servidor web não diz nada de útil e ocupa a tela toda.
+        if isinstance(corpo, str) and corpo.lstrip().lower().startswith(("<!doctype", "<html")):
+            print("         (o servidor respondeu uma página de erro, não dados)")
+        else:
+            texto = json.dumps(corpo, ensure_ascii=False, indent=2) if isinstance(corpo, (dict, list)) else str(corpo)
+            for linha in texto.splitlines():
+                print(f"         {linha}")
         print()
+        nao_encontrado = nao_encontrado or status == 404
         houve_falha = houve_falha or status >= 400
 
-    if houve_falha:
+    if nao_encontrado:
+        print(
+            "HTTP 404 aqui significa que esta API não tem essa rota — e NÃO que o\n"
+            "município esteja sem convênio. Os parâmetros municipais ficam num\n"
+            "módulo à parte do de emissão; se você souber o endereço dele, passe em\n"
+            "--base. A lista oficial de municípios conveniados também está no\n"
+            "portal da NFS-e Nacional."
+        )
+    elif houve_falha:
         print(
             "Alguma consulta não respondeu 200. Se o município aparece sem convênio,\n"
-            "ou o serviço não consta na competência, a emissão pela NFS-e Nacional\n"
-            "vai continuar sendo recusada com E0312 — nesse caso o caminho é o\n"
-            "sistema próprio da prefeitura, ou outro código de serviço."
+            "ou o serviço não consta para ele, a emissão pela NFS-e Nacional vai\n"
+            "continuar sendo recusada com E0312 — nesse caso o caminho é o sistema\n"
+            "próprio da prefeitura, ou outro código de serviço."
         )
     return 0
 
