@@ -64,12 +64,13 @@ def bases_candidatas(config) -> list[str]:
     """
     dominio = "producaorestrita.nfse.gov.br" if config.ambiente == "homologacao" else "nfse.gov.br"
     candidatos = [
-        config.url_base,
-        f"https://sefin.{dominio}",
+        # O endereço da documentação oficial de APIs vem primeiro; os demais
+        # são tentativas, mantidas caso o caminho mude.
+        f"https://adn.{dominio}/parametrizacao",
         f"https://adn.{dominio}/contribuintes",
         f"https://adn.{dominio}",
-        f"https://parametros.{dominio}",
-        f"https://parametrosmunicipais.{dominio}",
+        config.url_base,
+        f"https://sefin.{dominio}",
         f"https://www.{dominio}",
     ]
     vistos, unicos = set(), []
