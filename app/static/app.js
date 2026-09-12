@@ -19,9 +19,7 @@
   document.querySelectorAll("[data-testar]").forEach(function (botao) {
     botao.addEventListener("click", function () {
       var destino = botao.getAttribute("data-testar");
-      var saida = document.getElementById(
-        destino.indexOf("certificado") >= 0 ? "resultado-certificado" : "resultado-email"
-      );
+      var saida = document.getElementById(botao.getAttribute("data-saida"));
       botao.disabled = true;
       saida.textContent = "Testando...";
       saida.className = "discreto";

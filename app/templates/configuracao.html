@@ -78,10 +78,16 @@
       </div>
     </div>
     <div class="acoes">
-      <button class="botao" type="button" data-testar="/configuracao/testar-certificado">
+      <button class="botao" type="button" data-testar="/configuracao/testar-certificado"
+              data-saida="resultado-certificado">
         Testar certificado
       </button>
       <span id="resultado-certificado" class="discreto"></span>
+      <button class="botao" type="button" data-testar="/configuracao/testar-conexao"
+              data-saida="resultado-conexao">
+        Testar conexão com a Sefin
+      </button>
+      <span id="resultado-conexao" class="discreto"></span>
     </div>
   </div>
 
@@ -333,7 +339,8 @@
       </div>
     </div>
     <div class="acoes">
-      <button class="botao" type="button" data-testar="/configuracao/testar-email">Enviar e-mail de teste</button>
+      <button class="botao" type="button" data-testar="/configuracao/testar-email"
+              data-saida="resultado-email">Enviar e-mail de teste</button>
       <span id="resultado-email" class="discreto"></span>
     </div>
   </div>

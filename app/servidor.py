@@ -22,7 +22,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from nfse import armazenamento_config as ac
-from nfse.certificado import ErroCertificado, carregar_certificado
+from nfse.certificado import ErroCertificado, carregar_certificado, criar_sessao_mtls
+from nfse.config import ROTA_CONSULTA_CHAVE
 from nfse.estado import ControleEmissao
 from nfse.email_envio import ErroEmail, enviar_nfse
 from nfse.planilha import ErroPlanilha
@@ -278,6 +279,46 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
                 f"Certificado de {certificado.cnpj_titular or 'CNPJ não identificado'}, "
                 f"válido até {certificado.valido_ate:%d/%m/%Y} "
                 f"({certificado.dias_para_vencer} dias)."
+            ),
+        })
+
+    @app.post("/configuracao/testar-conexao")
+    def testar_conexao():
+        """Abre a conexão com a Sefin do ambiente escolhido, sem emitir nada.
+
+        Serve para provar, antes de virar a chave para produção, as duas coisas
+        que a homologação não prova: que o endereço de produção responde e que
+        o certificado é aceito no handshake dele. A consulta é de leitura, por
+        uma chave inexistente — a Sefin responde "não encontrada", e isso já
+        basta: significa que passou pelo TLS e chegou na aplicação.
+        """
+        config = _carregar_config_tolerante()
+        try:
+            certificado = carregar_certificado(config.para_configuracao())
+            certificado.validar_vigencia()
+        except ErroCertificado as exc:
+            return JSONResponse({"ok": False, "mensagem": str(exc)})
+
+        alvo = config.para_configuracao()
+        rota = ROTA_CONSULTA_CHAVE.format(chave="0" * 50)
+        try:
+            resposta = criar_sessao_mtls(certificado).get(
+                alvo.url_base.rstrip("/") + rota, timeout=alvo.timeout_segundos
+            )
+        except Exception as exc:  # noqa: BLE001 — TLS/rede vira mensagem, não traceback
+            return JSONResponse({
+                "ok": False,
+                "mensagem": (
+                    f"Não foi possível falar com a Sefin de {config.ambiente}: {exc}"
+                ),
+            })
+
+        return JSONResponse({
+            "ok": True,
+            "mensagem": (
+                f"Conexão com a Sefin de {config.ambiente} funcionando, e o certificado "
+                f"foi aceito no handshake (a consulta de teste respondeu HTTP "
+                f"{resposta.status_code}, como esperado para uma chave inexistente)."
             ),
         })
 

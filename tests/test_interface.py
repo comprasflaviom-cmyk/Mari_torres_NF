@@ -294,6 +294,46 @@ def test_teste_de_certificado_reporta_validade(cliente):
     assert dados["dias"] > 170
 
 
+def test_testar_conexao_relata_a_falha_sem_derrubar_a_tela(cliente, monkeypatch):
+    """Prova o endereço da Sefin e o handshake sem emitir nada — é o que dá para
+    verificar antes de virar a chave para produção, já que a homologação não
+    exercita nem a URL de produção nem o certificado contra ela.
+
+    Aqui a rede não existe, então o teste cobre o caminho da falha: tem que
+    virar mensagem na tela, não erro 500.
+    """
+    from nfse import certificado as modulo_certificado
+
+    class SessaoQueNaoConecta:
+        def get(self, *args, **kwargs):
+            raise OSError("nome do servidor não resolvido")
+
+    monkeypatch.setattr(modulo_certificado, "criar_sessao_mtls", lambda cert: SessaoQueNaoConecta())
+    monkeypatch.setattr("app.servidor.criar_sessao_mtls", lambda cert: SessaoQueNaoConecta())
+
+    resposta = cliente.post("/configuracao/testar-conexao", headers={NOME_HEADER: TOKEN})
+
+    assert resposta.status_code == 200
+    dados = resposta.json()
+    assert dados["ok"] is False
+    assert "nome do servidor não resolvido" in dados["mensagem"]
+
+
+def test_testar_conexao_confirma_quando_a_sefin_responde(cliente, monkeypatch):
+    class RespostaFalsa:
+        status_code = 404   # chave inexistente: já prova que passou do TLS
+
+    monkeypatch.setattr(
+        "app.servidor.criar_sessao_mtls",
+        lambda cert: type("S", (), {"get": lambda self, *a, **k: RespostaFalsa()})(),
+    )
+
+    dados = cliente.post("/configuracao/testar-conexao", headers={NOME_HEADER: TOKEN}).json()
+
+    assert dados["ok"] is True
+    assert "certificado foi aceito" in dados["mensagem"]
+
+
 def test_testar_certificado_funciona_antes_de_salvar(cliente, dados_app):
     """Não pode exigir 'Salvar' primeiro só para poder testar o arquivo escolhido."""
     config = ac.carregar()
