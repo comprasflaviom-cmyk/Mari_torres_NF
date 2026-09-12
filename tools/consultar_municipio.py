@@ -54,6 +54,49 @@ def consultar(sessao, base: str, rota: str, timeout: int) -> tuple[int, object]:
         return resposta.status_code, resposta.text[:400]
 
 
+def bases_candidatas(config) -> list[str]:
+    """Endereços onde a API de parâmetros municipais pode estar.
+
+    O módulo de parametrização é separado do de emissão e a documentação
+    oficial não estava acessível para confirmar o host. Em vez de tentar um
+    por rodada, o utilitário varre os candidatos e diz qual respondeu — são
+    consultas de leitura, com o mesmo certificado da emissão.
+    """
+    dominio = "producaorestrita.nfse.gov.br" if config.ambiente == "homologacao" else "nfse.gov.br"
+    candidatos = [
+        config.url_base,
+        f"https://sefin.{dominio}",
+        f"https://adn.{dominio}/contribuintes",
+        f"https://adn.{dominio}",
+        f"https://parametros.{dominio}",
+        f"https://parametrosmunicipais.{dominio}",
+        f"https://www.{dominio}",
+    ]
+    vistos, unicos = set(), []
+    for base in candidatos:
+        if base.rstrip("/") not in vistos:
+            vistos.add(base.rstrip("/"))
+            unicos.append(base)
+    return unicos
+
+
+def descobrir_base(sessao, config, municipio: str) -> str | None:
+    """Devolve a primeira base que responde à consulta de convênio."""
+    sonda = ROTAS["Convênio do município com o Sistema Nacional"].format(
+        municipio=municipio, servico="", competencia=""
+    )
+    for base in bases_candidatas(config):
+        try:
+            status, _ = consultar(sessao, base, sonda, config.timeout_segundos)
+        except Exception as exc:  # noqa: BLE001 — host inexistente é resposta, não falha
+            print(f"   {base} -> {type(exc).__name__}")
+            continue
+        print(f"   {base} -> HTTP {status}")
+        if status < 400:
+            return base
+    return None
+
+
 def main() -> int:
     analisador = argparse.ArgumentParser(description=__doc__)
     analisador.add_argument("--municipio", help="código IBGE de 7 dígitos")
@@ -89,7 +132,21 @@ def main() -> int:
         print(f"Certificado: {exc}")
         return 1
 
-    base = argumentos.base or config.url_base
+    if argumentos.base:
+        base = argumentos.base
+    else:
+        print("Procurando a API de parâmetros municipais:")
+        base = descobrir_base(sessao, config, municipio)
+        print()
+        if base is None:
+            print(
+                "Nenhum dos endereços conhecidos respondeu à consulta de convênio.\n"
+                "Isso não diz nada sobre o município — só que não achei a API por aqui.\n"
+                "Se você souber o endereço certo, passe em --base. A lista oficial de\n"
+                "municípios conveniados também está no portal da NFS-e Nacional."
+            )
+            return 1
+
     print(f"API ........: {base}")
     print()
 
