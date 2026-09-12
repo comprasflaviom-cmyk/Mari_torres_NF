@@ -216,12 +216,15 @@ class Emissor:
                     linha, resposta, xml_assinado,
                 )
                 registro.situacao = "REJEITADA"
-                registro.detalhe = resposta.motivo_erro
+                registro.detalhe = resposta.motivo_erro + self._contexto_da_rejeicao(resposta)
                 # Número não consumido: a Sefin não registrou nada.
                 self.controle.ultimo_numero -= 1
                 ao_progredir(EventoProgresso(
                     tipo="fim_linha", situacao="REJEITADA", registro=registro, **contexto,
-                    mensagem=f"{rotulo} | REJEITADA (HTTP {resposta.status_http}): {resposta.motivo_erro}",
+                    mensagem=(
+                        f"{rotulo} | REJEITADA (HTTP {resposta.status_http}): "
+                        f"{resposta.motivo_erro}{self._contexto_da_rejeicao(resposta)}"
+                    ),
                 ))
 
         except Exception as exc:  # noqa: BLE001 — uma linha ruim não derruba o lote
@@ -244,6 +247,21 @@ class Emissor:
         caminho = destino / f"dps_simulada_linha{linha.numero_linha:03d}.xml"
         caminho.write_bytes(xml_assinado)
         return caminho
+
+    def _contexto_da_rejeicao(self, resposta) -> str:
+        """Acrescenta à rejeição o dado que ela cobra mas não mostra.
+
+        O E0312 diz que o código de tributação não é administrado pelo
+        município, sem dizer qual código foi enviado nem para qual município —
+        e é exatamente isso que a pessoa precisa conferir para saber se a
+        correção que ela acabou de fazer na Configuração chegou a valer.
+        """
+        if not any("E0312" in m for m in resposta.mensagens):
+            return ""
+        return (
+            f" [enviamos cTribNac={self.config.servico.codigo_tributacao_nacional}"
+            f" para o município {self.config.servico.codigo_municipio_prestacao}]"
+        )
 
     def _concluir_autorizada(
         self, linha, opcoes, resposta, xml_assinado, impressao,

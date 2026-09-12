@@ -95,6 +95,36 @@ def test_nota_autorizada_arquiva_e_registra_numeracao(
     assert emissor.controle.ja_emitida(impressao_da_linha(linha, "2026-09-01"))
 
 
+def test_rejeicao_e0312_mostra_o_codigo_que_foi_enviado(
+    config, linha, certificado_teste, email_desligado
+):
+    """O E0312 cobra o código de tributação sem dizer qual foi enviado — que é
+    justamente o que a pessoa precisa ver para saber se a correção que ela fez
+    na Configuração chegou a valer."""
+    emissor, _ = _montar(
+        config, certificado_teste, email_desligado,
+        [_rejeitada("[E0312] O código de tributação nacional informado não está administrado…")],
+    )
+
+    registro = emissor.emitir_uma(linha, OpcoesEmissao(competencia=COMPETENCIA))
+
+    assert registro.situacao == "REJEITADA"
+    assert config.servico.codigo_tributacao_nacional in registro.detalhe
+    assert config.servico.codigo_municipio_prestacao in registro.detalhe
+
+
+def test_outras_rejeicoes_nao_ganham_o_contexto_do_e0312(
+    config, linha, certificado_teste, email_desligado
+):
+    emissor, _ = _montar(
+        config, certificado_teste, email_desligado, [_rejeitada("[E0008] Data de emissão…")]
+    )
+
+    registro = emissor.emitir_uma(linha, OpcoesEmissao(competencia=COMPETENCIA))
+
+    assert "cTribNac" not in registro.detalhe
+
+
 def test_rejeicao_nao_consome_numeracao(config, linha, certificado_teste, email_desligado):
     """A Sefin não registrou nada, então o número continua livre."""
     emissor, _ = _montar(

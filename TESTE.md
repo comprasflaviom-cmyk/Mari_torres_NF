@@ -405,10 +405,17 @@ comuns:
 > **Sobre o `E0312`.** O `cTribNac` tem 6 dígitos: os 4 primeiros são o subitem
 > da lista da LC 116, os 2 últimos são o desdobro. `170101` e `170100` são o
 > mesmo subitem 17.01 com desdobros diferentes, e o município administra só os
-> desdobros que adotou. Três formas de achar o certo, da mais rápida para a mais
-> lenta: olhar o código em uma nota que a empresa já emitiu; perguntar ao
-> contador; rodar `python tools/consultar_municipio.py`, que consulta os
-> parâmetros do município direto na Sefin.
+> desdobros que adotou. A forma mais confiável de achar o certo é olhar o código
+> numa NFS-e que a empresa já emitiu — ele está no DANFSe, em "Código de
+> Tributação Nacional/Municipal".
+>
+> **Mas atenção: pode não ser o seu código.** Aconteceu aqui: a DPS foi enviada
+> com o mesmo `cTribNac`, o mesmo município, o mesmo CNPJ e o mesmo regime de
+> uma nota que a Sefin **aceitou em produção** — e a produção restrita recusou
+> assim mesmo. A parametrização municipal do ambiente de teste é incompleta: nem
+> todo município carrega ali a lista de serviços que usa em produção. Se o seu
+> código veio de uma nota real e ainda assim volta `E0312` em homologação, não
+> há configuração que resolva — veja **C5**.
 
 Rejeição **não consome numeração** — corrija e emita de novo sem se preocupar
 com o número.
@@ -428,6 +435,17 @@ Com a nota já autorizada, tente emitir a **mesma linha** de novo:
 - [ ] Confira o relatório CSV em `logs\relatorio_*.csv`
 
 ## C5. Passar para produção
+
+> **Se a homologação travou num `E0312` que você já provou não ser seu** (código
+> tirado de uma nota real, mesmo município, mesmo regime), o lote completo em
+> homologação deixa de ser possível — e insistir nele não prova mais nada. Nesse
+> caso, pule o item do lote abaixo e faça o primeiro teste real assim: **uma
+> nota que a empresa precisa emitir de qualquer jeito**, de valor pequeno, para
+> um cliente real. Se algo sair errado, ela é cancelável no prazo do município;
+> e se sair certo, não foi desperdício — é uma nota de verdade, que precisava
+> existir. Cuide da numeração antes: confira em qual série a empresa já emite
+> (o DANFSe mostra em "Série da DPS") e use uma série diferente aqui, para as
+> duas não brigarem pela numeração.
 
 Só depois de tudo acima:
 
