@@ -386,14 +386,19 @@ comuns:
 | `[E0714] Arquivo enviado com erro na assinatura` | Quase sempre **certificado de outro CNPJ**, não defeito na assinatura — veja abaixo |
 | Regime tributário | Configuração → Prestador (confirme com o contador) |
 
-> **Sobre o `E0714`.** A Sefin usa essa mesma mensagem quando a assinatura está
-> tecnicamente perfeita mas **quem assinou não é o prestador declarado na nota**
-> — situação comum em grupo com mais de uma empresa, quando se pega o A1 errado.
-> Como a mensagem fala em assinatura, é fácil perder horas procurando defeito no
-> lugar errado. Por isso o app agora confere isso antes de transmitir: se o CNPJ
-> do certificado não bater com o CNPJ do prestador, ele avisa na hora, dizendo os
-> dois CNPJs. A saída é usar o A1 da empresa que emite, ou corrigir o CNPJ em
-> Configuração.
+> **Sobre o `E0714`.** A mensagem fala em assinatura, mas a Sefin a usa para
+> várias situações em volta dela. Duas já custaram caro aqui:
+>
+> - **Certificado de outro CNPJ.** Comum em grupo com mais de uma empresa,
+>   quando se pega o A1 errado. O app agora confere antes de transmitir e avisa
+>   dizendo os dois CNPJs. A saída é usar o A1 de quem emite, ou corrigir o CNPJ
+>   em Configuração.
+> - **Perfil de algoritmo.** O schema oficial não fixa qual usar. O padrão do app
+>   é o `classico` (RSA-SHA1 + C14N 1.0), o mesmo da NF-e. Se a rejeição
+>   persistir com tudo o mais certo, dá para testar o outro perfil sem mexer em
+>   código: crie um arquivo chamado `.env` na pasta do projeto com a linha
+>   `ASSINATURA_ALGORITMO=moderno` (RSA-SHA256 + C14N exclusivo), reinicie o
+>   servidor e emita de novo. Para voltar, apague a linha.
 
 Rejeição **não consome numeração** — corrija e emita de novo sem se preocupar
 com o número.

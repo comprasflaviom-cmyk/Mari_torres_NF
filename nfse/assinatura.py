@@ -23,12 +23,24 @@ Atenção, duas rejeições reais que já apareceram e o porquê da correção:
    forma independente de quem a gerou.
 
 2. `[E0714] Arquivo enviado com erro na assinatura` — apareceu já com o
-   prefixo corrigido, com um certificado real. RSA-SHA1 + C14N 1.0 é o
-   padrão histórico da NF-e clássica, mas a NFS-e Nacional (sistema
-   diferente, mais novo) usa **RSA-SHA256 + Exclusive XML Canonicalization**
-   (`http://www.w3.org/2001/10/xml-exc-c14n#`), confirmado contra uma
-   implementação de referência de terceiros. Daí o algoritmo padrão ter
-   virado sha256 e todo `c14n` daqui usar `exclusive=True`.
+   prefixo corrigido e com um certificado real. A assinatura em si está
+   certa: o digest e o RSA conferem tanto pela verificação própria quanto
+   por uma biblioteca independente (signxml), sobre o XML exato que a Sefin
+   recusou. Ou seja: o erro fala de assinatura, mas o que a Sefin recusa é
+   alguma condição em volta dela.
+
+   Causas já confirmadas e tratadas: assinar com certificado de outro CNPJ
+   (veja `CertificadoA1.validar_titular`); mandar a cadeia inteira no
+   `<X509Data>`, que além de não ajudar saía fora de ordem; e um bug do lxml
+   que corrompia a canonicalização (veja `canonizar`) — esse último invalida
+   as duas primeiras tentativas com o perfil clássico, que nunca chegaram a
+   sair daqui com bytes íntegros.
+
+   O perfil de algoritmos ficou configurável (`PERFIS`, abaixo) porque o
+   schema oficial não fixa nenhum: `classico` (RSA-SHA1 + C14N 1.0), o
+   padrão do ecossistema fiscal brasileiro e o default daqui, e `moderno`
+   (RSA-SHA256 + exc-c14n). Trocar entre eles é `ASSINATURA_ALGORITMO` no
+   `.env`, sem mexer em código.
 """
 
 from __future__ import annotations
@@ -47,12 +59,38 @@ from .certificado import CertificadoA1
 from .config import NAMESPACE_DPS
 
 NAMESPACE_XMLDSIG = "http://www.w3.org/2000/09/xmldsig#"
-C14N_ALGORITMO = "http://www.w3.org/2001/10/xml-exc-c14n#"
+
+C14N_CLASSICO = "http://www.w3.org/TR/2001/REC-xml-c14n-20010315"
+C14N_EXCLUSIVO = "http://www.w3.org/2001/10/xml-exc-c14n#"
+
+# A declaração XML como todo o ecossistema fiscal brasileiro a escreve. O lxml
+# emitiria `<?xml version='1.0' encoding='utf-8'?>`, com aspas simples e minúsculas;
+# fora do padrão não é erro de XML, mas os validadores fiscais são conhecidos por
+# analisar o arquivo de forma literal (é o que está por trás da recusa a prefixo
+# de namespace), e não vale arriscar por causa de aspas.
+DECLARACAO_XML = b'<?xml version="1.0" encoding="UTF-8"?>'
 
 
-def _c14n(elemento) -> bytes:
-    """Canoniza no exc-c14n exigido pela NFS-e Nacional (não o C14N 1.0 inclusive)."""
-    return etree.tostring(elemento, method="c14n", exclusive=True)
+def canonizar(elemento, exclusivo: bool) -> bytes:
+    """Canoniza um elemento — desviando de um bug do lxml que corrompe a assinatura.
+
+    `etree.tostring(elemento, method="c14n")` sobre um elemento que está DENTRO
+    de outra árvore emite `xmlns=""` em elementos que pertencem, sim, a um
+    namespace: no nosso caso, `Transforms`, `Transform`, `DigestMethod` e
+    `DigestValue`. Undeclarar o namespace deles muda o significado do XML, e a
+    assinatura acaba calculada sobre bytes que nenhum outro validador
+    reproduz — foi o que fez a Sefin recusar com `[E0714]` enquanto a
+    verificação local dizia que estava tudo certo (as duas pontas usavam a
+    mesma função defeituosa, então combinavam entre si).
+
+    O bug só aparece no C14N inclusivo e só a partir do segundo nível abaixo do
+    elemento canonizado; serializar e reinterpretar o elemento como documento
+    próprio devolve a forma correta. Isso vale aqui porque a DPS não tem
+    nenhum namespace de ancestral que o C14N inclusivo devesse arrastar para
+    dentro do trecho assinado além do que já está declarado nele.
+    """
+    isolado = etree.fromstring(etree.tostring(elemento))
+    return etree.tostring(isolado, method="c14n", exclusive=exclusivo)
 
 
 class ErroAssinatura(RuntimeError):
@@ -64,24 +102,35 @@ def _ds(tag: str) -> QName:
     return QName(NAMESPACE_XMLDSIG, tag)
 
 
-# Confira o algoritmo exigido no Manual de Orientação ao Contribuinte (MOC) da
-# NFS-e Nacional antes de emitir em produção. sha256 é o padrão da NFS-e
-# Nacional; sha1 fica disponível só como saída de emergência caso algum
-# município ainda exija o padrão antigo da NF-e clássica. As URIs de sha256
-# usam namespaces "-more"/"xmlenc" próprios (não há RSA-SHA256/SHA256
-# nativos no xmldsig-core original).
-ALGORITMOS = {
-    "sha1": {
+# Dois perfis de assinatura completos. Trocar só o hash sem trocar a
+# canonicalização junto não faz sentido: os validadores fiscais esperam a
+# combinação inteira, e misturar as duas metades foi o que mais atrapalhou o
+# diagnóstico da rejeição E0714.
+#
+# `classico` é o perfil da NF-e/CT-e/MDF-e, que o ecossistema fiscal brasileiro
+# usa há anos e que as bibliotecas de NFS-e Nacional seguem. É o padrão aqui.
+# `moderno` existe porque o schema oficial não fixa algoritmo nenhum e há
+# implementações usando SHA-256; se a Sefin recusar o clássico, dá para trocar
+# sem mexer em código, com ASSINATURA_ALGORITMO=moderno no .env.
+PERFIS = {
+    "classico": {
         "assinatura": f"{NAMESPACE_XMLDSIG}rsa-sha1",
         "digest": f"{NAMESPACE_XMLDSIG}sha1",
         "hash": hashes.SHA1,
+        "c14n": C14N_CLASSICO,
+        "exclusivo": False,
     },
-    "sha256": {
+    "moderno": {
         "assinatura": "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
         "digest": "http://www.w3.org/2001/04/xmlenc#sha256",
         "hash": hashes.SHA256,
+        "c14n": C14N_EXCLUSIVO,
+        "exclusivo": True,
     },
 }
+# Nomes antigos, de quando a opção era só o hash.
+PERFIS["sha1"] = PERFIS["classico"]
+PERFIS["sha256"] = PERFIS["moderno"]
 
 
 def assinar_dps(xml_dps: bytes, cert: CertificadoA1) -> bytes:
@@ -95,19 +144,20 @@ def assinar_dps(xml_dps: bytes, cert: CertificadoA1) -> bytes:
     if inf_dps is None or not inf_dps.get("Id"):
         raise ErroAssinatura("Elemento <infDPS> sem atributo Id — não é possível assinar.")
 
-    escolha = os.getenv("ASSINATURA_ALGORITMO", "sha256").strip().lower()
-    if escolha not in ALGORITMOS:
+    escolha = os.getenv("ASSINATURA_ALGORITMO", "classico").strip().lower()
+    if escolha not in PERFIS:
         raise ErroAssinatura(
-            f"ASSINATURA_ALGORITMO inválido: {escolha!r}. Use 'sha1' ou 'sha256'."
+            f"ASSINATURA_ALGORITMO inválido: {escolha!r}. Use 'classico' ou 'moderno'."
         )
-    algoritmo = ALGORITMOS[escolha]
-    classe_hash = algoritmo["hash"]
+    perfil = PERFIS[escolha]
+    classe_hash = perfil["hash"]
+    c14n_algoritmo = perfil["c14n"]
 
     # 1) Digest de infDPS. A transformação enveloped-signature é inócua aqui:
     #    <Signature> é irmão de <infDPS> (não descendente) — não há nada para remover.
     id_ref = inf_dps.get("Id")
     resumo = hashes.Hash(classe_hash())
-    resumo.update(_c14n(inf_dps))
+    resumo.update(canonizar(inf_dps, perfil["exclusivo"]))
     digest_value = base64.b64encode(resumo.finalize()).decode("ascii")
 
     # 2) Monta <Signature> já anexado à árvore real da DPS, com o xmldsig
@@ -116,18 +166,18 @@ def assinar_dps(xml_dps: bytes, cert: CertificadoA1) -> bytes:
     #    sem redeclarar e sem prefixo (o que a Sefin exige).
     sig = SubElement(raiz, _ds("Signature"), nsmap={None: NAMESPACE_XMLDSIG})
     signed_info = SubElement(sig, _ds("SignedInfo"))
-    SubElement(signed_info, _ds("CanonicalizationMethod"), Algorithm=C14N_ALGORITMO)
-    SubElement(signed_info, _ds("SignatureMethod"), Algorithm=algoritmo["assinatura"])
+    SubElement(signed_info, _ds("CanonicalizationMethod"), Algorithm=c14n_algoritmo)
+    SubElement(signed_info, _ds("SignatureMethod"), Algorithm=perfil["assinatura"])
     referencia = SubElement(signed_info, _ds("Reference"), URI="#" + id_ref)
     transformacoes = SubElement(referencia, _ds("Transforms"))
     SubElement(transformacoes, _ds("Transform"), Algorithm=f"{NAMESPACE_XMLDSIG}enveloped-signature")
-    SubElement(transformacoes, _ds("Transform"), Algorithm=C14N_ALGORITMO)
-    SubElement(referencia, _ds("DigestMethod"), Algorithm=algoritmo["digest"])
+    SubElement(transformacoes, _ds("Transform"), Algorithm=c14n_algoritmo)
+    SubElement(referencia, _ds("DigestMethod"), Algorithm=perfil["digest"])
     SubElement(referencia, _ds("DigestValue")).text = digest_value
 
     # 3) Canonicaliza o SignedInfo já dentro da árvore real (contexto de
     #    namespace correto) e assina com a chave do certificado.
-    c14n_signed_info = _c14n(signed_info)
+    c14n_signed_info = canonizar(signed_info, perfil["exclusivo"])
     try:
         assinatura = cert.chave_privada.sign(c14n_signed_info, padding.PKCS1v15(), classe_hash())
     except Exception as exc:  # noqa: BLE001 — chave incompatível vira erro claro, não traceback
@@ -136,16 +186,17 @@ def assinar_dps(xml_dps: bytes, cert: CertificadoA1) -> bytes:
     SubElement(sig, _ds("SignatureValue")).text = base64.b64encode(assinatura).decode("ascii")
     key_info = SubElement(sig, _ds("KeyInfo"))
     x509_data = SubElement(key_info, _ds("X509Data"))
-    # O certificado do titular primeiro, seguido da cadeia até a AC raiz (se
-    # houver): XMLDSig permite vários <X509Certificate> no mesmo <X509Data>, e
-    # sem a cadeia o validador pode não conseguir montar o caminho de
-    # certificação até uma AC confiável.
-    for certificado in [cert.certificado, *cert.cadeia]:
-        SubElement(x509_data, _ds("X509Certificate")).text = base64.b64encode(
-            certificado.public_bytes(Encoding.DER)
-        ).decode("ascii")
+    # Só o certificado do titular, como fazem as implementações de NFS-e
+    # Nacional. Chegamos a enviar a cadeia inteira junto, tentando destravar a
+    # rejeição E0714, e não mudou nada — pior: o `.pfx` devolve a cadeia fora de
+    # ordem (a raiz vinha antes da AC intermediária), e caminho de certificação
+    # embaralhado atrapalha mais do que ajuda. A Sefin já valida esse mesmo
+    # certificado no handshake mTLS, então ela conhece a cadeia.
+    SubElement(x509_data, _ds("X509Certificate")).text = base64.b64encode(
+        cert.certificado.public_bytes(Encoding.DER)
+    ).decode("ascii")
 
-    return etree.tostring(raiz, encoding="utf-8", xml_declaration=True)
+    return DECLARACAO_XML + etree.tostring(raiz, encoding="utf-8", xml_declaration=False)
 
 
 def empacotar_para_envio(xml_assinado: bytes) -> str:

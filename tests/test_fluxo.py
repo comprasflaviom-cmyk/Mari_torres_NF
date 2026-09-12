@@ -14,7 +14,9 @@ from lxml import etree
 
 from nfse.assinatura import (
     NAMESPACE_XMLDSIG,
+    PERFIS,
     assinar_dps,
+    canonizar,
     desempacotar_retorno,
     empacotar_para_envio,
 )
@@ -119,76 +121,116 @@ def test_assinatura_nao_usa_prefixo_de_namespace(config, linha, certificado_test
         assert etree.QName(elemento).namespace == NAMESPACE_XMLDSIG
 
 
-def test_assinatura_embute_a_cadeia_do_certificado(config, linha, certificado_teste):
-    """Sem a cadeia até a AC raiz, o validador da Sefin pode não conseguir montar
-    o caminho de certificação — encontrado numa rejeição real ([E0714] "Arquivo
-    enviado com erro na assinatura") assim que o [E1228] de namespace foi
-    corrigido e o certificado real (com cadeia) entrou em cena."""
-    import datetime as dt
+def test_assinatura_leva_so_o_certificado_do_titular(config, linha, certificado_teste):
+    """A cadeia até a AC raiz não vai junto.
 
-    from cryptography import x509
-    from cryptography.hazmat.primitives.asymmetric import rsa
-    from cryptography.x509.oid import NameOID
+    Chegamos a enviar a cadeia inteira tentando destravar a rejeição real
+    [E0714], e não mudou nada — e o `.pfx` devolve essa cadeia fora de ordem,
+    o que atrapalha quem tenta montar o caminho de certificação. As
+    implementações de NFS-e Nacional mandam só o certificado do titular.
+    """
+    from dataclasses import replace
 
-    from nfse.certificado import CertificadoA1
-
-    chave_ac = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    nome_ac = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "AC INTERMEDIARIA DE TESTE")])
-    agora = dt.datetime.now(dt.timezone.utc)
-    certificado_ac = (
-        x509.CertificateBuilder()
-        .subject_name(nome_ac).issuer_name(nome_ac)
-        .public_key(chave_ac.public_key()).serial_number(x509.random_serial_number())
-        .not_valid_before(agora - dt.timedelta(days=1))
-        .not_valid_after(agora + dt.timedelta(days=365))
-        .sign(chave_ac, hashes.SHA256())
-    )
-    com_cadeia = CertificadoA1(
-        certificado=certificado_teste.certificado,
-        chave_privada=certificado_teste.chave_privada,
-        cadeia=[certificado_ac],
-        cert_pem=certificado_teste.cert_pem,
-        chave_pem=certificado_teste.chave_pem,
-    )
+    com_cadeia = replace(certificado_teste, cadeia=[certificado_teste.certificado])
 
     assinado = assinar_dps(dps_para_xml(montar_dps(config, linha, 1)), com_cadeia)
     raiz = etree.fromstring(assinado)
     certificados = raiz.findall(".//ds:X509Data/ds:X509Certificate", NS)
-    assert len(certificados) == 2, "titular + cadeia deveriam gerar dois <X509Certificate>"
+    assert len(certificados) == 1, "só o certificado do titular deveria ir no <X509Data>"
 
 
-def test_assinatura_confere_apos_reserializar(config, linha, certificado_teste):
+def test_declaracao_xml_no_formato_do_ecossistema_fiscal(config, linha, certificado_teste):
+    """Aspas duplas e UTF-8 em maiúsculas, como todo emissor fiscal escreve.
+
+    O lxml escreveria `<?xml version='1.0' encoding='utf-8'?>`. É XML válido,
+    mas os validadores fiscais analisam o arquivo de forma literal (é o que
+    está por trás da recusa a prefixo de namespace), e não vale arriscar.
+    """
+    assinado = assinar_dps(dps_para_xml(montar_dps(config, linha, 1)), certificado_teste)
+    assert assinado.startswith(b'<?xml version="1.0" encoding="UTF-8"?>')
+
+
+@pytest.mark.parametrize("nome_perfil", ["classico", "moderno"])
+def test_canonicalizacao_nao_desdeclara_namespace(
+    config, linha, certificado_teste, monkeypatch, nome_perfil
+):
+    """Nenhum `xmlns=""` pode aparecer na forma canônica do que foi assinado.
+
+    O `etree.tostring(elemento, method="c14n")` do lxml, sobre um elemento
+    dentro de outra árvore, emite `xmlns=""` em `Transforms`, `Transform`,
+    `DigestMethod` e `DigestValue` — que pertencem, sim, ao namespace xmldsig.
+    A assinatura saía calculada sobre bytes que nenhum outro validador
+    reproduz, e a Sefin recusava com [E0714] enquanto a conferência local
+    dizia que estava tudo certo: as duas pontas usavam a mesma função
+    defeituosa e combinavam entre si. É o teste que teria pego isso.
+    """
+    monkeypatch.setenv("ASSINATURA_ALGORITMO", nome_perfil)
+    exclusivo = PERFIS[nome_perfil]["exclusivo"]
+    assinado = assinar_dps(dps_para_xml(montar_dps(config, linha, 1)), certificado_teste)
+    raiz = etree.fromstring(assinado)
+
+    for caminho in (f".//{{{NAMESPACE_XMLDSIG}}}SignedInfo", f"{{{NAMESPACE_DPS}}}infDPS"):
+        canonico = canonizar(raiz.find(caminho), exclusivo)
+        assert b'xmlns=""' not in canonico, f"{caminho} saiu com namespace desdeclarado"
+
+
+@pytest.mark.parametrize("nome_perfil", ["classico", "moderno"])
+def test_assinatura_confere_apos_reserializar(
+    config, linha, certificado_teste, monkeypatch, nome_perfil
+):
     """A árvore da assinatura é montada manualmente (não por uma lib de XMLDSig)
     porque a forma documentada do signxml para namespace sem prefixo gera uma
     assinatura que não bate mais consigo mesma depois de serializada e
-    reinterpretada. Confere aqui, de ponta a ponta e sem depender de nenhuma
-    lib de assinatura, que o SignedInfo reproduz byte a byte após reparse e que
-    a assinatura RSA e o digest de infDPS conferem de forma independente."""
+    reinterpretada. Confere aqui, nos dois perfis e sem depender de nenhuma lib
+    de assinatura, que o SignedInfo reproduz byte a byte após reparse e que a
+    assinatura RSA e o digest de infDPS conferem de forma independente."""
+    monkeypatch.setenv("ASSINATURA_ALGORITMO", nome_perfil)
+    perfil = PERFIS[nome_perfil]
+    exclusivo = perfil["exclusivo"]
+    classe_hash = perfil["hash"]
+
     assinado = assinar_dps(dps_para_xml(montar_dps(config, linha, 1)), certificado_teste)
 
     original = etree.fromstring(assinado)
-    signed_info_original = original.find(f".//{{{NAMESPACE_XMLDSIG}}}SignedInfo")
-    c14n_original = etree.tostring(signed_info_original, method="c14n", exclusive=True)
+    c14n_original = canonizar(original.find(f".//{{{NAMESPACE_XMLDSIG}}}SignedInfo"), exclusivo)
 
     reparsed = etree.fromstring(etree.tostring(original))
     signed_info_reparsed = reparsed.find(f".//{{{NAMESPACE_XMLDSIG}}}SignedInfo")
-    assert etree.tostring(signed_info_reparsed, method="c14n", exclusive=True) == c14n_original
+    assert canonizar(signed_info_reparsed, exclusivo) == c14n_original
 
     inf_dps = reparsed.find(f"{{{NAMESPACE_DPS}}}infDPS")
-    resumo = hashes.Hash(hashes.SHA256())  # sha256 é o padrão da NFS-e Nacional (ver assinatura.py)
-    resumo.update(etree.tostring(inf_dps, method="c14n", exclusive=True))
+    resumo = hashes.Hash(classe_hash())
+    resumo.update(canonizar(inf_dps, exclusivo))
     digest_calculado = base64.b64encode(resumo.finalize()).decode("ascii")
-    digest_no_xml = reparsed.find(f".//{{{NAMESPACE_XMLDSIG}}}DigestValue").text
-    assert digest_calculado == digest_no_xml
+    assert digest_calculado == reparsed.find(f".//{{{NAMESPACE_XMLDSIG}}}DigestValue").text
 
     assinatura_valor = reparsed.find(f".//{{{NAMESPACE_XMLDSIG}}}SignatureValue").text
-    chave_publica = certificado_teste.certificado.public_key()
-    chave_publica.verify(
+    certificado_teste.certificado.public_key().verify(
         base64.b64decode(assinatura_valor),
-        etree.tostring(signed_info_reparsed, method="c14n", exclusive=True),
+        canonizar(signed_info_reparsed, exclusivo),
         padding.PKCS1v15(),
-        hashes.SHA256(),
+        classe_hash(),
     )  # levanta InvalidSignature se não bater — a asserção é não ter lançado
+
+
+def test_assinatura_confere_por_biblioteca_independente(
+    config, linha, certificado_teste, monkeypatch
+):
+    """Conferência por uma biblioteca de XMLDSig completa, não pela nossa.
+
+    Só no perfil `moderno`. No `classico` o signxml não serve de árbitro: ele
+    canoniza chamando o mesmo lxml, e portanto reproduz o `xmlns=""` indevido
+    que `canonizar` existe para evitar — concordaria com o erro em vez de
+    apontá-lo. Lá quem cuida disso é
+    `test_canonicalizacao_nao_desdeclara_namespace`.
+    """
+    signxml = pytest.importorskip("signxml", reason="só roda com requirements-dev.txt")
+
+    monkeypatch.setenv("ASSINATURA_ALGORITMO", "moderno")
+    assinado = assinar_dps(dps_para_xml(montar_dps(config, linha, 1)), certificado_teste)
+
+    verificado = signxml.XMLVerifier().verify(assinado, x509_cert=certificado_teste.cert_pem)
+    assert verificado.signed_xml.tag == f"{{{NAMESPACE_DPS}}}infDPS"
 
 
 def test_pacote_gzip_base64_roundtrip(config, linha, certificado_teste):
