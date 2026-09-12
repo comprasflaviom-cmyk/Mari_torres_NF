@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pandas as pd
@@ -46,6 +46,33 @@ def test_dps_contem_campos_obrigatorios(config, linha):
     assert inf["valores"]["vServPrest"]["vServ"] == "4500.00"
     assert inf["valores"]["trib"]["tribMun"]["pAliq"] == "2.00"
     assert inf["dCompet"] == "2026-09-01"
+
+
+def test_dhEmi_fica_no_passado_com_folga_de_relogio(config, linha):
+    """Rejeição real: `[E0008] A data de emissão da DPS não pode ser posterior à
+    data do seu processamento`. Quem decide o dhEmi é o relógio desta máquina, e
+    numa das tentativas ele saiu só 0,145 s antes do processamento da Sefin —
+    qualquer adiantamento do relógio local derrubava a nota."""
+    from datetime import datetime
+
+    from nfse.dps import FUSO_BRASILIA, MARGEM_RELOGIO
+
+    dps = montar_dps(config, linha, numero_dps=1)
+    emitido_em = datetime.fromisoformat(dps["infDPS"]["dhEmi"])
+    folga = datetime.now(FUSO_BRASILIA) - emitido_em
+
+    assert folga >= MARGEM_RELOGIO - timedelta(seconds=1), "dhEmi sem a folga de relógio"
+    assert folga < MARGEM_RELOGIO + timedelta(minutes=1), "dhEmi atrasado demais"
+
+
+def test_competencia_nao_escorrega_de_mes_por_causa_da_folga(config, linha):
+    """A folga desconta segundos do dhEmi, mas não pode empurrar a competência
+    para o mês anterior quando a emissão acontece logo depois da meia-noite."""
+    virada = datetime(2026, 9, 1, 0, 0, 2, tzinfo=timezone(timedelta(hours=-3)))
+
+    dps = montar_dps(config, linha, numero_dps=1, emitido_em=virada)
+
+    assert dps["infDPS"]["dCompet"] == "2026-09-01"
 
 
 def test_endereco_completo_gera_bloco_end(config, linha):

@@ -39,6 +39,15 @@ from .planilha import LinhaFaturamento
 
 FUSO_BRASILIA = timezone(timedelta(hours=-3))
 
+# A Sefin recusa com `[E0008] A data de emissão da DPS não pode ser posterior à
+# data do seu processamento` — e quem decide o `dhEmi` é o relógio desta
+# máquina. Numa rejeição real o `dhEmi` saiu apenas 0,145 s antes do instante
+# em que a Sefin processou: margem nenhuma para o relógio local estar um
+# segundo adiantado. Estes segundos de folga resolvem isso sem distorcer nada
+# — a data continua a mesma, e a folga é menor que qualquer arredondamento
+# fiscal.
+MARGEM_RELOGIO = timedelta(seconds=10)
+
 
 def gerar_id_dps(config: Configuracao, numero_dps: int) -> str:
     """Monta o `Id` de 45 posições do elemento `infDPS`.
@@ -76,8 +85,14 @@ def montar_dps(
     data de emissão. Se você fatura em setembro um serviço prestado em agosto,
     passe `date(2026, 8, 1)` aqui.
     """
-    emitido_em = emitido_em or datetime.now(FUSO_BRASILIA)
-    competencia = competencia or emitido_em.date()
+    if emitido_em is None:
+        agora = datetime.now(FUSO_BRASILIA)
+        emitido_em = agora - MARGEM_RELOGIO
+        # A competência sai do relógio sem a folga: perto da meia-noite do dia
+        # 1º, descontar os segundos jogaria a nota para o mês anterior.
+        competencia = competencia or agora.date()
+    else:
+        competencia = competencia or emitido_em.date()
     prest = config.prestador
     serv = config.servico
 
