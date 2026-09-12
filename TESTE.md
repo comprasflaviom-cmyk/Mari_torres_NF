@@ -385,6 +385,7 @@ comuns:
 | Certificado / assinatura | Certificado errado, vencido, ou ainda o de teste |
 | `[E0714] Arquivo enviado com erro na assinatura` | Quase sempre **certificado de outro CNPJ**, não defeito na assinatura — veja abaixo |
 | `[E0008] A data de emissão … posterior à data do seu processamento` | Relógio do computador adiantado. O app já emite com alguns segundos de folga; se persistir, acerte o relógio do Windows (Configurações → Hora e idioma → Sincronizar agora) |
+| `[E0312] O código de tributação nacional … não está administrado pelo município` | O município não cuida desse código de serviço nessa competência — ou não é conveniado ao Sistema Nacional. Rode `python tools/consultar_municipio.py` para perguntar direto à Sefin |
 | Regime tributário | Configuração → Prestador (confirme com o contador) |
 
 > **Sobre o `E0714`.** A mensagem fala em assinatura, mas a Sefin a usa para
