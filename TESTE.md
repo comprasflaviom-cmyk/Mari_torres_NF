@@ -385,7 +385,7 @@ comuns:
 | Certificado / assinatura | Certificado errado, vencido, ou ainda o de teste |
 | `[E0714] Arquivo enviado com erro na assinatura` | Quase sempre **certificado de outro CNPJ**, não defeito na assinatura — veja abaixo |
 | `[E0008] A data de emissão … posterior à data do seu processamento` | Relógio do computador adiantado. O app já emite com alguns segundos de folga; se persistir, acerte o relógio do Windows (Configurações → Hora e idioma → Sincronizar agora) |
-| `[E0312] O código de tributação nacional … não está administrado pelo município` | O município não cuida desse código de serviço nessa competência — ou não é conveniado ao Sistema Nacional. Rode `python tools/consultar_municipio.py` para perguntar direto à Sefin |
+| `[E0312] O código de tributação nacional … não está administrado pelo município` | Quase sempre o **desdobro** do código: são 4 dígitos do subitem da LC 116 + 2 do desdobro, e o município pode não usar aquele desdobro (`170101` × `170100`). Veja abaixo |
 | Regime tributário | Configuração → Prestador (confirme com o contador) |
 
 > **Sobre o `E0714`.** A mensagem fala em assinatura, mas a Sefin a usa para
@@ -401,6 +401,14 @@ comuns:
 >   código: crie um arquivo chamado `.env` na pasta do projeto com a linha
 >   `ASSINATURA_ALGORITMO=moderno` (RSA-SHA256 + C14N exclusivo), reinicie o
 >   servidor e emita de novo. Para voltar, apague a linha.
+
+> **Sobre o `E0312`.** O `cTribNac` tem 6 dígitos: os 4 primeiros são o subitem
+> da lista da LC 116, os 2 últimos são o desdobro. `170101` e `170100` são o
+> mesmo subitem 17.01 com desdobros diferentes, e o município administra só os
+> desdobros que adotou. Três formas de achar o certo, da mais rápida para a mais
+> lenta: olhar o código em uma nota que a empresa já emitiu; perguntar ao
+> contador; rodar `python tools/consultar_municipio.py`, que consulta os
+> parâmetros do município direto na Sefin.
 
 Rejeição **não consome numeração** — corrija e emita de novo sem se preocupar
 com o número.

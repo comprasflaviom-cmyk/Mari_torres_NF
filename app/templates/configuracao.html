@@ -134,7 +134,7 @@
       <div class="campo">
         <label for="servico_ctribnac">Código de tributação nacional (cTribNac)</label>
         <input type="text" id="servico_ctribnac" name="servico_ctribnac" value="{{ config.servico_ctribnac }}">
-        <span class="dica">170101 = consultoria/assessoria (LC 116, subitem 17.01). Confirme o desdobro da sua atividade.</span>
+        <span class="dica">São 6 dígitos: 4 do subitem da LC 116 + 2 do desdobro. Ex.: 1701 (consultoria/assessoria) + 00 = <span class="mono">170100</span>. Se o município não usa aquele desdobro, a nota volta com <span class="mono">E0312</span> — confira o código com o contador, ou numa nota que a empresa já emitiu.</span>
       </div>
       <div class="campo">
         <label for="servico_cod_municipio">Município da prestação (IBGE)</label>
