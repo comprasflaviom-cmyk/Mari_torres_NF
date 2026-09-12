@@ -168,15 +168,15 @@ def test_assinatura_confere_apos_reserializar(config, linha, certificado_teste):
 
     original = etree.fromstring(assinado)
     signed_info_original = original.find(f".//{{{NAMESPACE_XMLDSIG}}}SignedInfo")
-    c14n_original = etree.tostring(signed_info_original, method="c14n")
+    c14n_original = etree.tostring(signed_info_original, method="c14n", exclusive=True)
 
     reparsed = etree.fromstring(etree.tostring(original))
     signed_info_reparsed = reparsed.find(f".//{{{NAMESPACE_XMLDSIG}}}SignedInfo")
-    assert etree.tostring(signed_info_reparsed, method="c14n") == c14n_original
+    assert etree.tostring(signed_info_reparsed, method="c14n", exclusive=True) == c14n_original
 
     inf_dps = reparsed.find(f"{{{NAMESPACE_DPS}}}infDPS")
-    resumo = hashes.Hash(hashes.SHA1())
-    resumo.update(etree.tostring(inf_dps, method="c14n"))
+    resumo = hashes.Hash(hashes.SHA256())  # sha256 é o padrão da NFS-e Nacional (ver assinatura.py)
+    resumo.update(etree.tostring(inf_dps, method="c14n", exclusive=True))
     digest_calculado = base64.b64encode(resumo.finalize()).decode("ascii")
     digest_no_xml = reparsed.find(f".//{{{NAMESPACE_XMLDSIG}}}DigestValue").text
     assert digest_calculado == digest_no_xml
@@ -185,9 +185,9 @@ def test_assinatura_confere_apos_reserializar(config, linha, certificado_teste):
     chave_publica = certificado_teste.certificado.public_key()
     chave_publica.verify(
         base64.b64decode(assinatura_valor),
-        etree.tostring(signed_info_reparsed, method="c14n"),
+        etree.tostring(signed_info_reparsed, method="c14n", exclusive=True),
         padding.PKCS1v15(),
-        hashes.SHA1(),
+        hashes.SHA256(),
     )  # levanta InvalidSignature se não bater — a asserção é não ter lançado
 
 

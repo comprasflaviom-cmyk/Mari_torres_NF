@@ -1,24 +1,34 @@
 """
 Assinatura digital XMLDSig da DPS e empacotamento para o envelope JSON.
 
-A Sefin Nacional rejeita DPS não assinada. O padrão exigido é o mesmo da
-NF-e/NFS-e: **XMLDSig enveloped**, com `Reference URI="#<Id do infDPS>"`,
-transformações `enveloped-signature` + `c14n` e o certificado do prestador
-embutido em `<X509Data>`.
+A Sefin Nacional rejeita DPS não assinada. O padrão exigido é **XMLDSig
+enveloped**, com `Reference URI="#<Id do infDPS>"`, transformações
+`enveloped-signature` + **C14N exclusivo** (`exc-c14n`, não o C14N 1.0
+"inclusive" da NF-e clássica) e o certificado do prestador embutido em
+`<X509Data>`.
 
-Atenção: a Sefin Nacional rejeita `<Signature>` com prefixo de namespace
-(erro `[E1228] Xml declarado com prefixo de namespace`) — exige
-`xmlns="..."` sem prefixo, tanto no `<Signature>` quanto em seus filhos.
-Por isso a árvore da assinatura é montada manualmente aqui (em vez de usar a
-montagem automática de uma lib de XMLDSig): testamos que a forma documentada
-do signxml para isso (`signer.namespaces = {None: ...}`) produz uma
-assinatura que já não bate consigo mesma depois de serializada e
-reinterpretada — ou seja, o próprio documento que ela gera falha ao ser
-reverificado, o que teria feito a Sefin trocar essa rejeição por outra
-("assinatura inválida"), pior de diagnosticar. Construindo a árvore nós
-mesmos com o `c14n` do lxml, confirmamos que o `SignedInfo` reproduz
-byte a byte após reserializar e reinterpretar o XML, e que a assinatura RSA
-confere de forma independente do papel que a gerou.
+Atenção, duas rejeições reais que já apareceram e o porquê da correção:
+
+1. `[E1228] Xml declarado com prefixo de namespace` — a Sefin exige
+   `xmlns="..."` sem prefixo, tanto no `<Signature>` quanto em seus filhos.
+   Por isso a árvore da assinatura é montada manualmente aqui (em vez de usar
+   a montagem automática de uma lib de XMLDSig): testamos que a forma
+   documentada do signxml para isso (`signer.namespaces = {None: ...}`)
+   produz uma assinatura que já não bate consigo mesma depois de serializada
+   e reinterpretada — ou seja, o próprio documento que ela gera falha ao ser
+   reverificado, o que teria trocado essa rejeição por "assinatura inválida",
+   pior de diagnosticar. Construindo a árvore nós mesmos com o `c14n` do
+   lxml, confirmamos que o `SignedInfo` reproduz byte a byte após
+   reserializar e reinterpretar o XML, e que a assinatura RSA confere de
+   forma independente de quem a gerou.
+
+2. `[E0714] Arquivo enviado com erro na assinatura` — apareceu já com o
+   prefixo corrigido, com um certificado real. RSA-SHA1 + C14N 1.0 é o
+   padrão histórico da NF-e clássica, mas a NFS-e Nacional (sistema
+   diferente, mais novo) usa **RSA-SHA256 + Exclusive XML Canonicalization**
+   (`http://www.w3.org/2001/10/xml-exc-c14n#`), confirmado contra uma
+   implementação de referência de terceiros. Daí o algoritmo padrão ter
+   virado sha256 e todo `c14n` daqui usar `exclusive=True`.
 """
 
 from __future__ import annotations
@@ -37,7 +47,12 @@ from .certificado import CertificadoA1
 from .config import NAMESPACE_DPS
 
 NAMESPACE_XMLDSIG = "http://www.w3.org/2000/09/xmldsig#"
-C14N_ALGORITMO = "http://www.w3.org/TR/2001/REC-xml-c14n-20010315"
+C14N_ALGORITMO = "http://www.w3.org/2001/10/xml-exc-c14n#"
+
+
+def _c14n(elemento) -> bytes:
+    """Canoniza no exc-c14n exigido pela NFS-e Nacional (não o C14N 1.0 inclusive)."""
+    return etree.tostring(elemento, method="c14n", exclusive=True)
 
 
 class ErroAssinatura(RuntimeError):
@@ -50,9 +65,11 @@ def _ds(tag: str) -> QName:
 
 
 # Confira o algoritmo exigido no Manual de Orientação ao Contribuinte (MOC) da
-# NFS-e Nacional antes de emitir em produção. sha1 é o padrão histórico dos
-# webservices fiscais brasileiros; as URIs de sha256 usam namespaces "-more"
-# próprios (não há RSA-SHA256/SHA256 nativos no xmldsig-core original).
+# NFS-e Nacional antes de emitir em produção. sha256 é o padrão da NFS-e
+# Nacional; sha1 fica disponível só como saída de emergência caso algum
+# município ainda exija o padrão antigo da NF-e clássica. As URIs de sha256
+# usam namespaces "-more"/"xmlenc" próprios (não há RSA-SHA256/SHA256
+# nativos no xmldsig-core original).
 ALGORITMOS = {
     "sha1": {
         "assinatura": f"{NAMESPACE_XMLDSIG}rsa-sha1",
@@ -78,7 +95,7 @@ def assinar_dps(xml_dps: bytes, cert: CertificadoA1) -> bytes:
     if inf_dps is None or not inf_dps.get("Id"):
         raise ErroAssinatura("Elemento <infDPS> sem atributo Id — não é possível assinar.")
 
-    escolha = os.getenv("ASSINATURA_ALGORITMO", "sha1").strip().lower()
+    escolha = os.getenv("ASSINATURA_ALGORITMO", "sha256").strip().lower()
     if escolha not in ALGORITMOS:
         raise ErroAssinatura(
             f"ASSINATURA_ALGORITMO inválido: {escolha!r}. Use 'sha1' ou 'sha256'."
@@ -90,7 +107,7 @@ def assinar_dps(xml_dps: bytes, cert: CertificadoA1) -> bytes:
     #    <Signature> é irmão de <infDPS> (não descendente) — não há nada para remover.
     id_ref = inf_dps.get("Id")
     resumo = hashes.Hash(classe_hash())
-    resumo.update(etree.tostring(inf_dps, method="c14n"))
+    resumo.update(_c14n(inf_dps))
     digest_value = base64.b64encode(resumo.finalize()).decode("ascii")
 
     # 2) Monta <Signature> já anexado à árvore real da DPS, com o xmldsig
@@ -110,7 +127,7 @@ def assinar_dps(xml_dps: bytes, cert: CertificadoA1) -> bytes:
 
     # 3) Canonicaliza o SignedInfo já dentro da árvore real (contexto de
     #    namespace correto) e assina com a chave do certificado.
-    c14n_signed_info = etree.tostring(signed_info, method="c14n")
+    c14n_signed_info = _c14n(signed_info)
     try:
         assinatura = cert.chave_privada.sign(c14n_signed_info, padding.PKCS1v15(), classe_hash())
     except Exception as exc:  # noqa: BLE001 — chave incompatível vira erro claro, não traceback
