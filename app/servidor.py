@@ -32,6 +32,7 @@ from nfse.clientes import completar_com_cadastro
 from nfse.estado import nome_da_maquina
 from nfse.servico import OpcoesEmissao, montar_emissor
 
+from .recorrencias import registrar as registrar_rotas_recorrencias, repositorio_recorrencias
 from .rotas_clientes import registrar as registrar_rotas_clientes, repositorio_clientes, repositorio_emissoes
 from .seguranca import Guardiao, gravar_cookie, montar_middleware
 from .sessao import ESTADO, LoteEmAndamento, importar_planilha
@@ -105,6 +106,7 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
             backup=_situacao_backup(config),
             maquina=nome_da_maquina(),
             conflito_maquina=_conflito_de_maquina(config),
+            pendentes_recorrencia=len(repositorio_recorrencias().listar_pendentes()),
         )
 
     # ------------------------------------------------------------------
@@ -157,6 +159,7 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
 
         config.serie_dps = texto("serie_dps", config.serie_dps) or "1"
         config.numero_dps_inicial = numero("numero_dps_inicial", config.numero_dps_inicial)
+        config.recorrencia_modo = texto("recorrencia_modo", config.recorrencia_modo) or "manual"
         config.diretorio_notas = texto("diretorio_notas")
         config.diretorio_logs = texto("diretorio_logs")
         config.pasta_backup = texto("pasta_backup")
@@ -498,6 +501,7 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         return RedirectResponse(f"/historico?reconstruido={total}", status_code=303)
 
     registrar_rotas_clientes(app, pagina, _carregar_config_tolerante)
+    registrar_rotas_recorrencias(app, pagina, _carregar_config_tolerante)
     return app
 
 

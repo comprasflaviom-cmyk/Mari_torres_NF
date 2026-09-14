@@ -25,28 +25,32 @@ import json
 import sqlite3
 from dataclasses import asdict, dataclass, fields
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from .planilha import LinhaFaturamento, somente_digitos, validar_dv_cnpj, validar_dv_cpf
 
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS clientes (
-    documento          TEXT PRIMARY KEY,
-    razao_social       TEXT NOT NULL,
-    email              TEXT DEFAULT '',
-    logradouro         TEXT DEFAULT '',
-    numero             TEXT DEFAULT '',
-    complemento        TEXT DEFAULT '',
-    bairro             TEXT DEFAULT '',
-    cod_municipio      TEXT DEFAULT '',
-    uf                 TEXT DEFAULT '',
-    cep                TEXT DEFAULT '',
-    telefone           TEXT DEFAULT '',
-    ativo              INTEGER NOT NULL DEFAULT 1,
-    receber_por_email  INTEGER NOT NULL DEFAULT 1,
-    observacao         TEXT DEFAULT '',
-    criado_em          TEXT NOT NULL,
-    atualizado_em      TEXT NOT NULL
+    documento               TEXT PRIMARY KEY,
+    razao_social            TEXT NOT NULL,
+    email                   TEXT DEFAULT '',
+    logradouro              TEXT DEFAULT '',
+    numero                  TEXT DEFAULT '',
+    complemento             TEXT DEFAULT '',
+    bairro                  TEXT DEFAULT '',
+    cod_municipio           TEXT DEFAULT '',
+    uf                      TEXT DEFAULT '',
+    cep                     TEXT DEFAULT '',
+    telefone                TEXT DEFAULT '',
+    ativo                   INTEGER NOT NULL DEFAULT 1,
+    receber_por_email       INTEGER NOT NULL DEFAULT 1,
+    observacao              TEXT DEFAULT '',
+    valor_recorrente        TEXT DEFAULT '',
+    descricao_recorrente    TEXT DEFAULT '',
+    dia_emissao_recorrente  INTEGER NOT NULL DEFAULT 0,
+    criado_em               TEXT NOT NULL,
+    atualizado_em           TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS emissoes (
@@ -61,9 +65,42 @@ CREATE TABLE IF NOT EXISTS emissoes (
     arquivos       TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_emissoes_documento ON emissoes(documento);
-CREATE INDEX IF NOT EXISTS idx_clientes_ativo     ON clientes(ativo);
+-- Uma pendência por cliente e competência: o dia de emissão recorrente pode
+-- ser conferido de novo (reabrir o app, verificação periódica) sem duplicar
+-- nada, porque a UNIQUE abaixo faz a segunda tentativa virar no-op.
+CREATE TABLE IF NOT EXISTS recorrencias (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    documento      TEXT NOT NULL,
+    competencia    TEXT NOT NULL,
+    valor          TEXT NOT NULL DEFAULT '',
+    descricao      TEXT NOT NULL DEFAULT '',
+    estado         TEXT NOT NULL,
+    chave_acesso   TEXT DEFAULT '',
+    criado_em      TEXT NOT NULL,
+    atualizado_em  TEXT NOT NULL,
+    UNIQUE(documento, competencia)
+);
+
+CREATE INDEX IF NOT EXISTS idx_emissoes_documento    ON emissoes(documento);
+CREATE INDEX IF NOT EXISTS idx_clientes_ativo        ON clientes(ativo);
+CREATE INDEX IF NOT EXISTS idx_recorrencias_estado   ON recorrencias(estado);
 """
+
+# Colunas que podem não existir ainda num banco criado antes delas existirem —
+# `CREATE TABLE IF NOT EXISTS` não altera tabela já criada, então isso cobre
+# quem atualiza o app com um cadastro antigo.
+_COLUNAS_NOVAS_CLIENTES = {
+    "valor_recorrente": "TEXT DEFAULT ''",
+    "descricao_recorrente": "TEXT DEFAULT ''",
+    "dia_emissao_recorrente": "INTEGER NOT NULL DEFAULT 0",
+}
+
+
+def _migrar_colunas_novas(conexao: sqlite3.Connection) -> None:
+    existentes = {linha["name"] for linha in conexao.execute("PRAGMA table_info(clientes)")}
+    for coluna, tipo in _COLUNAS_NOVAS_CLIENTES.items():
+        if coluna not in existentes:
+            conexao.execute(f"ALTER TABLE clientes ADD COLUMN {coluna} {tipo}")
 
 
 class ErroCadastro(ValueError):
@@ -86,8 +123,16 @@ class Cliente:
     ativo: bool = True                  # entra no faturamento
     receber_por_email: bool = True      # recebe a NFS-e automaticamente
     observacao: str = ""
+    # Recorrência: gera nota sozinho todo mês, sem planilha. Ver nfse/recorrencia.py.
+    valor_recorrente: str = ""          # decimal como texto; vazio = valor varia todo mês
+    descricao_recorrente: str = ""
+    dia_emissao_recorrente: int = 0     # dia do mês (1-28); 0 = não é recorrente
     criado_em: str = ""
     atualizado_em: str = ""
+
+    @property
+    def recorrente(self) -> bool:
+        return self.dia_emissao_recorrente > 0
 
     def validar(self) -> None:
         documento = somente_digitos(self.documento)
@@ -109,6 +154,23 @@ class Cliente:
             )
         if self.cod_municipio and len(somente_digitos(self.cod_municipio)) != 7:
             raise ErroCadastro("O código do município (IBGE) tem 7 dígitos.")
+
+        if self.dia_emissao_recorrente:
+            if not (1 <= self.dia_emissao_recorrente <= 28):
+                raise ErroCadastro("O dia de emissão recorrente deve ser entre 1 e 28.")
+            if not self.descricao_recorrente.strip():
+                raise ErroCadastro(
+                    "Descreva o serviço recorrente — é o que vai na nota que o app monta sozinho."
+                )
+        if self.valor_recorrente.strip():
+            bruto = self.valor_recorrente.strip()
+            try:
+                valor = Decimal(bruto.replace(".", "").replace(",", ".")) if "," in bruto else Decimal(bruto)
+                if valor <= 0:
+                    raise InvalidOperation
+            except InvalidOperation:
+                raise ErroCadastro(f"Valor mensal recorrente inválido: {bruto!r}")
+            self.valor_recorrente = f"{valor.quantize(Decimal('0.01')):f}"
 
     @property
     def tipo_documento(self) -> str:
@@ -137,6 +199,7 @@ class BancoLocal:
         self.caminho.parent.mkdir(parents=True, exist_ok=True)
         with self._conectar() as conexao:
             conexao.executescript(ESQUEMA)
+            _migrar_colunas_novas(conexao)
 
     def _conectar(self) -> sqlite3.Connection:
         conexao = sqlite3.connect(self.caminho, timeout=10)
@@ -324,6 +387,110 @@ class RepositorioEmissoes:
             self.registrar(dados)
             total += 1
         return total
+
+
+# ---------------------------------------------------------------------------
+# Recorrência (ver nfse/recorrencia.py para quem decide "quem venceu")
+# ---------------------------------------------------------------------------
+ESTADOS_PENDENTES = ("aguardando_valor", "aguardando_aprovacao")
+
+
+@dataclass
+class Recorrencia:
+    """Uma pendência de nota recorrente: um cliente, uma competência.
+
+    `estado` conta a história: `aguardando_valor` (cliente sem valor fixo
+    cadastrado — alguém precisa digitar antes de emitir), `aguardando_aprovacao`
+    (valor já conhecido, falta o clique — ou a tentativa automática, se o modo
+    estiver ligado), `emitida` ou `pulada`.
+    """
+
+    id: int
+    documento: str
+    competencia: str            # "AAAA-MM"
+    valor: str
+    descricao: str
+    estado: str
+    chave_acesso: str
+    criado_em: str
+    atualizado_em: str
+
+
+class RepositorioRecorrencias:
+    def __init__(self, banco: BancoLocal):
+        self.banco = banco
+
+    def criar_pendencia(
+        self, documento: str, competencia: str, valor: str, descricao: str, estado: str
+    ) -> tuple[Recorrencia, bool]:
+        """Cria a pendência do mês para o cliente, se ainda não existir uma.
+
+        Idempotente por causa do UNIQUE(documento, competencia): chamar de novo
+        para o mesmo cliente na mesma competência não duplica nada — só devolve
+        o que já existia. `criada_agora` diz qual dos dois casos aconteceu.
+        """
+        agora = datetime.now().isoformat(timespec="seconds")
+        with self.banco._conectar() as conexao:
+            cursor = conexao.execute(
+                """INSERT OR IGNORE INTO recorrencias
+                   (documento, competencia, valor, descricao, estado, criado_em, atualizado_em)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (documento, competencia, valor, descricao, estado, agora, agora),
+            )
+            criada_agora = cursor.rowcount > 0
+            linha = conexao.execute(
+                "SELECT * FROM recorrencias WHERE documento = ? AND competencia = ?",
+                (documento, competencia),
+            ).fetchone()
+        return _linha_para_recorrencia(linha), criada_agora
+
+    def listar_pendentes(self) -> list[Recorrencia]:
+        marcadores = ", ".join("?" * len(ESTADOS_PENDENTES))
+        with self.banco._conectar() as conexao:
+            linhas = conexao.execute(
+                f"SELECT * FROM recorrencias WHERE estado IN ({marcadores}) "
+                "ORDER BY competencia, documento",
+                ESTADOS_PENDENTES,
+            ).fetchall()
+        return [_linha_para_recorrencia(l) for l in linhas]
+
+    def listar_recentes(self, limite: int = 100) -> list[Recorrencia]:
+        with self.banco._conectar() as conexao:
+            linhas = conexao.execute(
+                "SELECT * FROM recorrencias ORDER BY criado_em DESC LIMIT ?", (limite,)
+            ).fetchall()
+        return [_linha_para_recorrencia(l) for l in linhas]
+
+    def buscar(self, id_: int) -> Recorrencia | None:
+        with self.banco._conectar() as conexao:
+            linha = conexao.execute("SELECT * FROM recorrencias WHERE id = ?", (id_,)).fetchone()
+        return _linha_para_recorrencia(linha) if linha else None
+
+    def definir_valor(self, id_: int, valor: str) -> None:
+        with self.banco._conectar() as conexao:
+            conexao.execute(
+                "UPDATE recorrencias SET valor = ?, atualizado_em = ? WHERE id = ?",
+                (valor, datetime.now().isoformat(timespec="seconds"), id_),
+            )
+
+    def marcar_emitida(self, id_: int, chave_acesso: str) -> None:
+        with self.banco._conectar() as conexao:
+            conexao.execute(
+                "UPDATE recorrencias SET estado = 'emitida', chave_acesso = ?, atualizado_em = ? "
+                "WHERE id = ?",
+                (chave_acesso, datetime.now().isoformat(timespec="seconds"), id_),
+            )
+
+    def marcar_pulada(self, id_: int) -> None:
+        with self.banco._conectar() as conexao:
+            conexao.execute(
+                "UPDATE recorrencias SET estado = 'pulada', atualizado_em = ? WHERE id = ?",
+                (datetime.now().isoformat(timespec="seconds"), id_),
+            )
+
+
+def _linha_para_recorrencia(linha: sqlite3.Row) -> Recorrencia:
+    return Recorrencia(**dict(linha))
 
 
 # ---------------------------------------------------------------------------

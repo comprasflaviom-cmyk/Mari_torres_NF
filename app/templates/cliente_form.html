@@ -104,6 +104,40 @@
   </div>
 
   <div class="cartao">
+    <h2 style="margin-top:0">Emissão recorrente</h2>
+    <p class="discreto">
+      Preencha para o app montar a nota deste cliente sozinho todo mês, sem
+      planilha. Deixe o dia em branco para continuar faturando só por
+      planilha ou nota avulsa.
+    </p>
+    <div class="grade">
+      <div class="campo">
+        <label for="dia_emissao_recorrente">Dia do mês para emitir</label>
+        <input type="number" id="dia_emissao_recorrente" name="dia_emissao_recorrente"
+               min="1" max="28"
+               value="{{ cliente.dia_emissao_recorrente if cliente and cliente.dia_emissao_recorrente else '' }}">
+        <span class="dica">1 a 28 (todo mês tem esses dias). Vazio = não é recorrente.</span>
+      </div>
+      <div class="campo">
+        <label for="valor_recorrente">Valor mensal (R$)</label>
+        <input type="text" id="valor_recorrente" name="valor_recorrente" inputmode="numeric"
+               placeholder="1.900,00" autocomplete="off"
+               value="{{ cliente.valor_recorrente if cliente else '' }}">
+        <span class="dica">
+          Deixe vazio se o valor varia todo mês — a pendência espera alguém
+          digitar antes de emitir, mesmo no modo automático.
+        </span>
+      </div>
+    </div>
+    <div class="campo" style="margin-top:16px">
+      <label for="descricao_recorrente">Descrição do serviço recorrente</label>
+      <textarea id="descricao_recorrente" name="descricao_recorrente"
+                >{{ cliente.descricao_recorrente if cliente else '' }}</textarea>
+      <span class="dica">Vai para o campo xDescServ da nota, todo mês.</span>
+    </div>
+  </div>
+
+  <div class="cartao">
     <div class="campo">
       <label for="observacao">Observações internas</label>
       <textarea id="observacao" name="observacao">{{ cliente.observacao if cliente else '' }}</textarea>

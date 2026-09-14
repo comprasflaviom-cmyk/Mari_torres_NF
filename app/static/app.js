@@ -102,6 +102,9 @@
   var btnSimularAvulsa = document.getElementById("btn-simular-avulsa");
   if (btnSimularAvulsa) { montarAvulsa(); return; }
 
+  /* ---- Tela de recorrências ---- */
+  if (window.EMISSOR_CONFIG && window.EMISSOR_CONFIG.recorrencias) { montarRecorrencias(); return; }
+
   /* ---- Tela de emissão em lote ---- */
   var btnSimular = document.getElementById("btn-simular");
   if (!btnSimular) return;
@@ -421,5 +424,103 @@
       habilitar(false);
       acompanhar();
     }
+  }
+
+  /* ---- Tela de recorrências ---- */
+  function montarRecorrencias() {
+    var cfg = window.EMISSOR_CONFIG || {};
+    var cortina = document.getElementById("cortina-recorrencia");
+    var confirmacao = document.getElementById("confirmacao-recorrencia");
+    var btnConfirmar = document.getElementById("btn-confirmar-recorrencia");
+    var linhaPendente = null;
+
+    /* Mesma máscara de moeda da nota avulsa: digita só números, o R$ se forma
+       da direita para a esquerda. */
+    document.querySelectorAll(".campo-valor").forEach(function (campo) {
+      campo.addEventListener("input", function () {
+        var digitos = campo.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+        if (!digitos) { campo.value = ""; return; }
+        var centavos = digitos.slice(-2).padStart(2, "0");
+        var inteiro = (digitos.slice(0, -2) || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+        campo.value = inteiro + "," + centavos;
+      });
+    });
+
+    function travarBotoes(travado) {
+      document.querySelectorAll(".botao-emitir-recorrencia, .botao-pular-recorrencia")
+        .forEach(function (b) { b.disabled = travado; });
+    }
+
+    function acompanhar(situacao) {
+      var fonte = new EventSource("/emitir/eventos");
+      fonte.onmessage = function (e) {
+        var ev = JSON.parse(e.data);
+        if (ev.tipo === "encerrado") {
+          situacao.textContent = ev.mensagem;
+          fonte.close();
+          setTimeout(function () { location.reload(); }, 1200);
+        } else if (ev.tipo === "fim_linha") {
+          situacao.textContent = ev.situacao === "AUTORIZADA" ? "Autorizada." : ev.mensagem;
+        }
+      };
+      fonte.onerror = function () { fonte.close(); };
+    }
+
+    function disparar(linha, textoConfirmacao) {
+      var id = linha.getAttribute("data-id");
+      var situacao = linha.querySelector(".situacao-recorrencia");
+      var dados = new FormData();
+      dados.append("valor", linha.querySelector(".campo-valor").value);
+      dados.append("confirmacao", textoConfirmacao || "");
+
+      travarBotoes(true);
+      situacao.textContent = "Iniciando...";
+      enviar("/recorrencias/" + id + "/emitir", dados)
+        .then(function (r) {
+          if (!r.dados.ok) {
+            situacao.textContent = r.dados.mensagem || "Não foi possível emitir.";
+            travarBotoes(false);
+            return;
+          }
+          situacao.textContent = "Emitindo...";
+          acompanhar(situacao);
+        })
+        .catch(function (erro) {
+          situacao.textContent = "Falha na comunicação: " + erro;
+          travarBotoes(false);
+        });
+    }
+
+    document.querySelectorAll(".botao-emitir-recorrencia").forEach(function (botao) {
+      botao.addEventListener("click", function () {
+        var linha = botao.closest("tr");
+        if (!cfg.producao) { disparar(linha); return; }
+        linhaPendente = linha;
+        confirmacao.value = "";
+        btnConfirmar.disabled = true;
+        cortina.hidden = false;
+        confirmacao.focus();
+      });
+    });
+
+    confirmacao.addEventListener("input", function () {
+      btnConfirmar.disabled = confirmacao.value.trim().toUpperCase() !== cfg.confirmacaoExigida;
+    });
+    btnConfirmar.addEventListener("click", function () {
+      cortina.hidden = true;
+      disparar(linhaPendente, confirmacao.value.trim());
+    });
+    document.getElementById("btn-cancelar-recorrencia").addEventListener("click", function () {
+      cortina.hidden = true;
+    });
+
+    document.querySelectorAll(".botao-pular-recorrencia").forEach(function (botao) {
+      botao.addEventListener("click", function () {
+        var linha = botao.closest("tr");
+        if (!confirm("Pular esta competência para este cliente? Ela não volta a aparecer sozinha.")) return;
+        enviar("/recorrencias/" + linha.getAttribute("data-id") + "/pular", new FormData())
+          .then(function () { location.reload(); });
+      });
+    });
   }
 })();

@@ -30,6 +30,7 @@ from .sessao import ESTADO, LoteEmAndamento
 CAMPOS_TEXTO = [
     "razao_social", "email", "logradouro", "numero", "complemento",
     "bairro", "cod_municipio", "uf", "cep", "telefone", "observacao",
+    "valor_recorrente", "descricao_recorrente",
 ]
 
 
@@ -75,10 +76,15 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
     async def salvar_cliente(requisicao: Request):
         formulario = await requisicao.form()
         dados = {campo: str(formulario.get(campo, "") or "").strip() for campo in CAMPOS_TEXTO}
+        try:
+            dia_recorrente = int(str(formulario.get("dia_emissao_recorrente", "") or "0").strip())
+        except ValueError:
+            dia_recorrente = 0
         cliente = Cliente(
             documento=somente_digitos(formulario.get("documento", "")),
             ativo=formulario.get("ativo") in ("on", "true", "1"),
             receber_por_email=formulario.get("receber_por_email") in ("on", "true", "1"),
+            dia_emissao_recorrente=dia_recorrente,
             **dados,
         )
         try:

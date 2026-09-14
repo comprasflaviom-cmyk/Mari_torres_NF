@@ -268,6 +268,27 @@ Volte em **Emitir** e clique em **Simular** de novo, com as mesmas linhas.
 A trava de verdade só age sobre nota transmitida — você vai vê-la funcionando
 na Etapa C.
 
+## A14. Conferir a tela de Recorrências (sem transmitir nada ainda)
+
+Em **Clientes → editar o Alfa**, preencha a seção "Emissão recorrente": dia
+`1`, descrição e um valor. Salve.
+
+```bat
+python -c "from app.recorrencias import verificar_pendencias; from nfse import armazenamento_config as ac; print(verificar_pendencias(ac.carregar()))"
+```
+
+- [ ] Aparece uma pendência criada
+- [ ] Ela aparece em **Recorrências**, com o valor já preenchido
+
+> **Diferente de Emitir/Nota avulsa, Recorrências não tem "Simular".** O botão
+> "Emitir agora" sempre transmite de verdade — por isso, com o certificado de
+> teste, esse é o limite do que dá para conferir aqui: a pendência nascendo e
+> aparecendo na tela. A transmissão de verdade só é possível com o A1 real, na
+> Etapa C.
+
+Depois de conferir, clique em **Pular este mês** para não deixar a pendência
+pendurada até a Etapa C.
+
 ---
 
 **Fim da Etapa A.** O aplicativo está validado em tudo que não depende da

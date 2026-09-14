@@ -105,6 +105,14 @@ def sem_navegador_de_verdade(monkeypatch):
     return urls
 
 
+@pytest.fixture(autouse=True)
+def dados_isolados(tmp_path, monkeypatch):
+    """`executar_com_bandeja` agora também dispara a verificação periódica de
+    recorrências, que lê a configuração do app — sem isto, os testes tocariam
+    a pasta de dados real de quem estiver rodando a suíte."""
+    monkeypatch.setenv("EMISSOR_NFSE_DIR", str(tmp_path / "dados"))
+
+
 def test_sair_do_menu_encerra_o_servidor_de_verdade(
     pystray_falso, pil_falso, sem_navegador_de_verdade
 ):

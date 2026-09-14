@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% set pagina_atual = 'recorrencias' %}
+{% block conteudo %}
+<h1>Recorrências</h1>
+<p class="subtitulo">
+  Notas mensais que o app monta sozinho, a partir do dia e do valor
+  cadastrados em cada cliente — sem passar por planilha.
+</p>
+
+{% if not pendentes %}
+  <div class="cartao vazio">
+    <p>Nenhuma pendência agora. Aparece aqui quando o dia de emissão de um cliente recorrente chegar.</p>
+    <a class="botao" href="/clientes">Ver cadastro de clientes</a>
+  </div>
+{% else %}
+<div class="cartao">
+  <div class="rolagem">
+    <table>
+      <thead>
+        <tr>
+          <th>Cliente</th><th>Competência</th><th>Valor (R$)</th><th>Descrição</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pendentes %}
+        <tr data-id="{{ p.id }}">
+          <td><strong>{{ p.razao_social }}</strong></td>
+          <td class="mono">{{ p.competencia }}</td>
+          <td>
+            <input type="text" class="campo-valor" inputmode="numeric"
+                   value="{{ p.valor | moeda if p.valor else '' }}" placeholder="0,00" autocomplete="off">
+          </td>
+          <td class="discreto">{{ p.descricao or 'sem descrição cadastrada' }}</td>
+          <td>
+            <div class="acoes" style="margin:0; flex-wrap:nowrap">
+              <button class="botao botao-pequeno {{ 'botao-perigo' if producao else '' }} botao-emitir-recorrencia"
+                      type="button">
+                {{ 'Emitir em PRODUÇÃO' if producao else 'Emitir em homologação' }}
+              </button>
+              <button class="botao botao-pequeno botao-pular-recorrencia" type="button">Pular este mês</button>
+            </div>
+            <span class="discreto situacao-recorrencia"></span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if recentes %}
+<div class="cartao">
+  <h2 style="margin-top:0">Últimas resolvidas</h2>
+  <div class="rolagem">
+    <table>
+      <thead><tr><th>Cliente</th><th>Competência</th><th>Situação</th></tr></thead>
+      <tbody>
+        {% for r in recentes %}
+        <tr>
+          <td>{{ r.razao_social }}</td>
+          <td class="mono">{{ r.competencia }}</td>
+          <td>
+            <span class="etiqueta {{ 'etiqueta-ok' if r.estado == 'emitida' else 'etiqueta-neutra' }}">
+              {{ 'Emitida' if r.estado == 'emitida' else 'Pulada' }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="cortina" id="cortina-recorrencia" hidden>
+  <div class="modal">
+    <h2>Emitir em produção</h2>
+    <p>Esta nota terá <strong>valor fiscal real</strong>. Desfazer exige cancelamento formal.</p>
+    <div class="campo">
+      <label for="confirmacao-recorrencia">Digite <span class="mono">EMITIR EM PRODUCAO</span> para liberar</label>
+      <input type="text" id="confirmacao-recorrencia" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="acoes">
+      <button class="botao botao-perigo" id="btn-confirmar-recorrencia" disabled>Emitir agora</button>
+      <button class="botao" id="btn-cancelar-recorrencia">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.EMISSOR_CONFIG = {
+    producao: {{ 'true' if producao else 'false' }},
+    confirmacaoExigida: "EMITIR EM PRODUCAO",
+    recorrencias: true
+  };
+</script>
+{% endblock %}

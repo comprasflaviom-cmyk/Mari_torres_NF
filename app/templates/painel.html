@@ -76,6 +76,13 @@
   </div>
 {% endif %}
 
+{% if pendentes_recorrencia %}
+  <div class="aviso aviso-atencao" style="margin-top:18px">
+    <strong>{{ pendentes_recorrencia }} nota(s) recorrente(s) esperando ação.</strong>
+    Resolva em <a href="/recorrencias">Recorrências</a>.
+  </div>
+{% endif %}
+
 {% if not cofre_ok %}
   <div class="aviso aviso-atencao">
     <strong>Cofre de senhas do sistema indisponível.</strong>

@@ -261,6 +261,31 @@
   </div>
 
   <div class="cartao">
+    <h2 style="margin-top:0">Emissão recorrente</h2>
+    <p class="discreto">
+      Clientes com dia do mês cadastrado (ver <a href="/clientes">Clientes</a>)
+      geram uma pendência sozinhos quando o dia chega. Isto decide o que
+      acontece com ela — ajustável a qualquer momento em
+      <a href="/recorrencias">Recorrências</a>.
+    </p>
+    <div class="campo">
+      <label for="recorrencia_modo">Modo</label>
+      <select id="recorrencia_modo" name="recorrencia_modo">
+        <option value="manual" {{ 'selected' if config.recorrencia_modo == 'manual' }}>
+          Manual — espera um clique em Recorrências, mesmo com valor já cadastrado
+        </option>
+        <option value="automatico" {{ 'selected' if config.recorrencia_modo == 'automatico' }}>
+          Automático — emite sozinho quando o cliente tem valor fixo cadastrado
+        </option>
+      </select>
+      <span class="dica">
+        Cliente sem valor fixo (valor varia todo mês) nunca é automático, nos
+        dois modos — sempre espera alguém digitar o valor daquele mês.
+      </span>
+    </div>
+  </div>
+
+  <div class="cartao">
     <h2 style="margin-top:0">Envio automático ao cliente</h2>
     <div class="campo-caixa" style="margin-bottom:16px">
       <input type="checkbox" id="email_enviar" name="email_enviar" {{ 'checked' if config.email_enviar }}>

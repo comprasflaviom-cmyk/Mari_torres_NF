@@ -251,6 +251,7 @@ não em arquivo de texto.
 | **Importar planilha** | Envia o `.xlsx` e mostra a grade de conferência: linhas válidas em verde, inválidas em vermelho com o motivo exato. **Nada é transmitido nesta tela.** |
 | **Emitir** | Competência, seleção de linhas, botão de simular ao lado do de emitir, barra de progresso e log ao vivo. |
 | **Nota avulsa** | Uma nota só, digitada na hora, escolhendo o cliente do cadastro. |
+| **Recorrências** | Notas mensais que o app monta sozinho — ver abaixo. |
 | **Clientes** | Cadastro com endereço, e as duas chaves explicadas abaixo. |
 | **Histórico** | Notas já emitidas, com busca por cliente, CNPJ ou chave de acesso. |
 
@@ -286,6 +287,28 @@ realmente não emitir mais naquela série.
 
 Na linha de comando o mesmo bloqueio vale, e `--assumir-maquina` é o
 equivalente do botão.
+
+### Emissão recorrente: nota mensal sem planilha
+
+Cada cliente pode ter, no próprio cadastro, um **dia do mês**, uma
+**descrição** e (opcional) um **valor fixo**. Quando o dia chega, o app cria
+sozinho uma pendência na tela **Recorrências** — sem precisar montar planilha
+naquele mês.
+
+O que acontece com a pendência depende do modo escolhido em Configuração:
+
+| Modo | Comportamento |
+|---|---|
+| **Manual** (padrão) | Espera um clique em "Emitir agora", mesmo com valor já cadastrado. |
+| **Automático** | Emite sozinho assim que a pendência nasce — só para cliente com valor fixo. |
+
+Cliente **sem** valor fixo (o valor varia todo mês) nunca é automático, nos
+dois modos: a pendência fica `aguardando_valor` e espera alguém digitar o
+valor daquele mês antes de emitir.
+
+A verificação roda ao abrir o app e depois a cada hora, enquanto ele continuar
+aberto — se o computador ficou desligado no dia certo, a pendência aparece
+assim que alguém reabre o aplicativo, sem esperar o próximo mês.
 
 ### Cadastro de clientes: duas chaves, não uma
 

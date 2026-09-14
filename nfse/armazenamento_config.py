@@ -180,6 +180,12 @@ class ConfiguracaoApp:
     serie_dps: str = "1"
     numero_dps_inicial: int = 1
 
+    # Emissão recorrente: "manual" espera um clique em Recorrências mesmo com
+    # valor já cadastrado; "automatico" emite sozinho assim que a pendência
+    # nasce, desde que o cliente tenha valor fixo (sem valor, é sempre manual —
+    # não tem o que inventar). Ver app/recorrencias.py.
+    recorrencia_modo: str = "manual"
+
     # HTTP
     http_timeout: int = 60
     http_max_tentativas: int = 3

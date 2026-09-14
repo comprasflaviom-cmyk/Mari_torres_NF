@@ -16,10 +16,15 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 from fastapi.testclient import TestClient
 
+from app.recorrencias import repositorio_recorrencias, verificar_pendencias
 from app.seguranca import NOME_HEADER, Guardiao
 from app.servidor import criar_app
 from app.sessao import ESTADO, TrabalhoEmissao
 from nfse import armazenamento_config as ac
+from nfse.certificado import carregar_certificado
+from nfse.cliente import RespostaEmissao
+from nfse.estado import ControleEmissao
+from nfse.servico import Emissor
 from tests.test_config_app import CofreEmMemoria
 
 TOKEN = "token-fixo-de-teste"
@@ -617,3 +622,167 @@ def test_configuracao_sem_novo_certificado_mantem_o_atual(cliente):
     config = ac.carregar()
     assert config.caminho_certificado_pfx == anterior
     assert config.serie_dps == "9"
+
+
+# ---------------------------------------------------------------------------
+# Recorrências
+# ---------------------------------------------------------------------------
+class _ClienteNFSeFalso:
+    """Substitui `ClienteNFSe` sem tocar a rede — mesma técnica de test_servico.py."""
+
+    def __init__(self, respostas: list[RespostaEmissao]):
+        self.respostas = list(respostas)
+
+    def emitir(self, pacote: str) -> RespostaEmissao:
+        return self.respostas.pop(0)
+
+    def baixar_danfse(self, chave: str) -> bytes:
+        return b"%PDF-1.4 conteudo"
+
+
+def _emissor_falso(config_app: ac.ConfiguracaoApp, chave: str = "CHAVE-REC1") -> Emissor:
+    configuracao = config_app.para_configuracao()
+    certificado = carregar_certificado(configuracao)
+    controle = ControleEmissao.carregar(
+        configuracao.diretorio_logs, config_app.ambiente, config_app.serie_dps,
+        config_app.numero_dps_inicial,
+    )
+    resposta = RespostaEmissao(
+        autorizada=True, status_http=201, chave_acesso=chave, id_dps="DPS" + chave,
+        xml_nfse=b"<NFSe/>", mensagens=[],
+    )
+    return Emissor(
+        config=configuracao, config_email=config_app.para_configuracao_email(),
+        certificado=certificado, cliente=_ClienteNFSeFalso([resposta]), controle=controle,
+    )
+
+
+def _cliente_recorrente(cliente, **campos):
+    dados = {"dia_emissao_recorrente": "1", "descricao_recorrente": "Consultoria mensal.",
+             "valor_recorrente": "1.900,00"}
+    dados.update(campos)
+    return _cadastrar(cliente, **dados)
+
+
+def test_tela_recorrencias_vazia(cliente):
+    pagina = cliente.get("/recorrencias", headers={NOME_HEADER: TOKEN}).text
+    assert "Nenhuma pendência agora" in pagina
+
+
+def test_verificar_pendencias_cria_pendencia_para_cliente_vencido(cliente):
+    _cliente_recorrente(cliente)
+    criadas = verificar_pendencias(ac.carregar())
+    assert len(criadas) == 1
+    assert criadas[0].estado == "aguardando_aprovacao"
+    assert criadas[0].valor == "1900.00"
+
+    pagina = cliente.get("/recorrencias", headers={NOME_HEADER: TOKEN}).text
+    assert "Cliente Alfa" in pagina
+
+
+def test_verificar_pendencias_sem_valor_fica_aguardando_valor(cliente):
+    _cliente_recorrente(cliente, valor_recorrente="")
+    criadas = verificar_pendencias(ac.carregar())
+    assert criadas[0].estado == "aguardando_valor"
+
+
+def test_verificar_pendencias_e_idempotente(cliente):
+    _cliente_recorrente(cliente)
+    verificar_pendencias(ac.carregar())
+    verificar_pendencias(ac.carregar())
+    assert len(repositorio_recorrencias().listar_pendentes()) == 1
+
+
+def test_emitir_recorrencia_inexistente_e_recusada(cliente):
+    resposta = cliente.post("/recorrencias/999/emitir", headers={NOME_HEADER: TOKEN}, data={})
+    assert resposta.status_code == 404
+
+
+def test_emitir_recorrencia_com_valor_invalido_e_recusada(cliente):
+    _cliente_recorrente(cliente, valor_recorrente="")
+    pendencia = verificar_pendencias(ac.carregar())[0]
+
+    resposta = cliente.post(f"/recorrencias/{pendencia.id}/emitir", headers={NOME_HEADER: TOKEN},
+                            data={"valor": "abc"})
+    assert resposta.status_code == 400
+    assert "Valor inválido" in resposta.json()["mensagem"]
+
+
+def test_emitir_recorrencia_em_producao_exige_confirmacao(cliente):
+    _cliente_recorrente(cliente)
+    pendencia = verificar_pendencias(ac.carregar())[0]
+    config = ac.carregar()
+    config.ambiente = "producao"
+    ac.salvar(config)
+
+    resposta = cliente.post(f"/recorrencias/{pendencia.id}/emitir", headers={NOME_HEADER: TOKEN}, data={})
+    assert resposta.status_code == 400
+    assert "EMITIR EM PRODUCAO" in resposta.json()["mensagem"]
+
+
+def test_emitir_recorrencia_autoriza_e_marca_emitida(cliente, monkeypatch):
+    _cliente_recorrente(cliente)
+    pendencia = verificar_pendencias(ac.carregar())[0]
+    monkeypatch.setattr("app.recorrencias.montar_emissor",
+                        lambda *a, **k: _emissor_falso(ac.carregar()))
+
+    resposta = cliente.post(f"/recorrencias/{pendencia.id}/emitir", headers={NOME_HEADER: TOKEN}, data={})
+    assert resposta.status_code == 200
+    assert resposta.json() == {"ok": True}
+
+    cliente.get("/emitir/eventos")   # consumir o SSE aguarda o lote terminar
+
+    resolvida = repositorio_recorrencias().buscar(pendencia.id)
+    assert resolvida.estado == "emitida"
+    assert resolvida.chave_acesso == "CHAVE-REC1"
+    assert repositorio_recorrencias().listar_pendentes() == []
+
+
+def test_emitir_recorrencia_aguardando_valor_aceita_o_valor_digitado(cliente, monkeypatch):
+    _cliente_recorrente(cliente, valor_recorrente="")
+    pendencia = verificar_pendencias(ac.carregar())[0]
+    assert pendencia.estado == "aguardando_valor"
+    monkeypatch.setattr("app.recorrencias.montar_emissor",
+                        lambda *a, **k: _emissor_falso(ac.carregar()))
+
+    resposta = cliente.post(f"/recorrencias/{pendencia.id}/emitir", headers={NOME_HEADER: TOKEN},
+                            data={"valor": "3.500,00"})
+    assert resposta.status_code == 200
+    cliente.get("/emitir/eventos")
+
+    resolvida = repositorio_recorrencias().buscar(pendencia.id)
+    assert resolvida.estado == "emitida"
+    assert resolvida.valor == "3500.00"
+
+
+def test_pular_recorrencia_some_das_pendentes(cliente):
+    _cliente_recorrente(cliente)
+    pendencia = verificar_pendencias(ac.carregar())[0]
+
+    resposta = cliente.post(f"/recorrencias/{pendencia.id}/pular", headers={NOME_HEADER: TOKEN}, data={})
+    assert resposta.status_code == 200
+    assert repositorio_recorrencias().listar_pendentes() == []
+    assert repositorio_recorrencias().buscar(pendencia.id).estado == "pulada"
+
+
+def test_modo_automatico_emite_sozinho_ao_verificar(cliente, monkeypatch):
+    _cliente_recorrente(cliente)
+    config = ac.carregar()
+    config.recorrencia_modo = "automatico"
+    ac.salvar(config)
+    monkeypatch.setattr("app.recorrencias.montar_emissor",
+                        lambda *a, **k: _emissor_falso(ac.carregar()))
+
+    verificar_pendencias(ac.carregar())
+    cliente.get("/emitir/eventos")   # consumir o SSE aguarda o lote terminar
+
+    pendentes = repositorio_recorrencias().listar_pendentes()
+    assert pendentes == [], "modo automático deveria emitir sozinho, sem esperar clique"
+
+
+def test_modo_manual_nao_emite_sozinho_ao_verificar(cliente):
+    _cliente_recorrente(cliente)
+    verificar_pendencias(ac.carregar())  # recorrencia_modo padrão é "manual"
+
+    pendentes = repositorio_recorrencias().listar_pendentes()
+    assert len(pendentes) == 1, "modo manual espera o clique em Emitir agora"
