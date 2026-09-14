@@ -78,10 +78,12 @@ def pystray_falso(monkeypatch):
 
 @pytest.fixture
 def pil_falso(monkeypatch):
-    """`_icone_da_bandeja` só chama `Image.new` e `ImageDraw.Draw(...).rounded_rectangle`
-    quando não há `empacotamento/icone.ico` — é só isso que o dublê precisa saber fazer."""
+    """`_icone_da_bandeja` usa `Image.open` quando `empacotamento/icone.ico`
+    existe (é o caso normal, já que o ícone está versionado no repositório) e
+    cai para `Image.new` + `ImageDraw` só se o arquivo não estiver lá."""
     modulo_image = types.ModuleType("PIL.Image")
     modulo_image.new = lambda modo, tamanho, cor: object()
+    modulo_image.open = lambda caminho: object()
 
     class _DesenhoFalso:
         def rounded_rectangle(self, *a, **k):
