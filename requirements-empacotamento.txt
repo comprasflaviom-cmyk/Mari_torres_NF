@@ -1,0 +1,7 @@
+# Só para gerar o executável Windows (empacotamento/LEIA-ME.md). O app em si
+# não depende disso — pystray e Pillow são importados só dentro de
+# app.lancador.executar_com_bandeja, o caminho do executável instalado.
+-r requirements.txt
+pyinstaller>=6.0
+pystray>=0.19           # ícone da bandeja do sistema
+pillow>=10.0             # desenha o ícone quando não há empacotamento/icone.ico

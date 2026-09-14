@@ -8,8 +8,7 @@
 ```bat
 python -m venv .venv
 .venv\Scripts\activate
-pip install -r requirements.txt
-pip install pyinstaller
+pip install -r requirements-empacotamento.txt
 ```
 
 ## 2. Gerar o aplicativo
@@ -36,12 +35,22 @@ O instalador sai em `empacotamento\saida\`.
 
 Instale **num computador sem Python** e confira:
 
-- [ ] O atalho do Menu Iniciar abre o navegador no painel
+- [ ] O atalho do Menu Iniciar abre o navegador no painel, sem nenhuma janela
+      de console aparecendo
+- [ ] Um ícone aparece na bandeja do sistema (perto do relógio) — clicar nele
+      reabre o painel
+- [ ] Fechar a aba do navegador **não** encerra o servidor: reabrir a URL, ou
+      clicar no ícone da bandeja de novo, continua funcionando
+- [ ] "Sair" no menu do ícone (clique direito) é que encerra o aplicativo de
+      verdade
 - [ ] A tela de Configuração salva o certificado e a senha
 - [ ] O botão "Testar certificado" mostra titular e validade
 - [ ] Uma simulação gera o XML na pasta de notas
 - [ ] A pasta de backup recebe os arquivos
-- [ ] Fechar a janela do console encerra o aplicativo
+- [ ] **Teste a falha:** renomeie temporariamente a pasta `app/templates` de
+      dentro do pacote instalado e abra o atalho — deve aparecer uma caixa de
+      mensagem dizendo onde está o log de erro, não só o aplicativo sumindo
+      sem explicação. Desfaça o rename depois.
 
 ---
 
@@ -59,6 +68,31 @@ instalador ganha reputação, ou some na hora se o executável for assinado.
 
 **Tamanho.** Cerca de 80–120 MB, porque pandas, lxml e cryptography vão junto.
 É o preço de não exigir Python instalado na máquina do usuário.
+
+---
+
+## Sobre a bandeja do sistema
+
+O executável instalado não abre janela de console — é de propósito, para uma
+pessoa não técnica nunca correr o risco de fechar "aquela tela preta" sem
+saber que estava derrubando o servidor. Em vez disso, ao abrir o atalho, um
+ícone aparece na bandeja do sistema (perto do relógio, geralmente escondido
+atrás da seta "^") e fica lá enquanto o app está no ar:
+
+- **Clique** no ícone reabre o painel no navegador.
+- **Clique direito → Sair** é a única forma de encerrar de verdade.
+- Fechar a aba do navegador não faz nada com o servidor — ele continua rodando
+  até alguém escolher "Sair".
+
+Vale explicar isso para quem for usar o app no dia a dia, principalmente que
+dá para fechar a aba do navegador sem medo. `python -m app` (uso pela linha de
+comando, para desenvolvimento) continua abrindo uma janela de console normal —
+essa mudança é só do executável instalado.
+
+Se a inicialização falhar (por exemplo, arquivo corrompido na instalação), não
+tem console para mostrar o erro: uma caixa de mensagem do Windows aponta o
+caminho de um arquivo de log em `%TEMP%\EmissorNFSe-erro-inicializacao.log`,
+que é o que enviar para o suporte.
 
 ---
 

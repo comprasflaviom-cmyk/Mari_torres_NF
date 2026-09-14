@@ -30,11 +30,14 @@ dados = [
     (str(RAIZ / "app" / "static"), "app/static"),
 ]
 
-# O keyring escolhe o backend em tempo de execução, então o PyInstaller não
-# enxerga o import do Gerenciador de Credenciais do Windows na análise estática.
+# O keyring e o pystray escolhem o backend em tempo de execução — o Gerenciador
+# de Credenciais e a bandeja do Windows, respectivamente — e o PyInstaller não
+# enxerga esse tipo de import na análise estática.
 ocultos = (
     collect_submodules("keyring.backends")
     + collect_submodules("uvicorn")
+    + collect_submodules("pystray")
+    + collect_submodules("PIL")
     + [
         "win32timezone",          # exigido pelo backend do keyring no Windows
         "email.mime.application",
@@ -63,7 +66,10 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="EmissorNFSe",
-    console=True,       # a janela mostra a URL local e serve para encerrar o app
+    # Sem janela de console: o app vive no ícone da bandeja do sistema (veja
+    # app.lancador.executar_com_bandeja). Fechar uma janela sem querer deixou
+    # de conseguir derrubar o servidor — só "Sair" no menu do ícone faz isso.
+    console=False,
     icon=str(RAIZ / "empacotamento" / "icone.ico") if (RAIZ / "empacotamento" / "icone.ico").exists() else None,
     debug=False,
     strip=False,
