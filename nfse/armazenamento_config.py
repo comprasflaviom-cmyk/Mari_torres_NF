@@ -21,7 +21,7 @@ import json
 import os
 import sys
 from dataclasses import asdict, dataclass, field, fields
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from .config import Configuracao, ParametrosServico, Prestador
@@ -166,6 +166,7 @@ class ConfiguracaoApp:
     servico_ret_issqn: int = 1
     servico_ind_tot_trib: int = 0
     iss_aliquota: str = ""                         # vazio = não informa (Simples)
+    servico_ptottribsn: str = ""                   # % do Simples (ME/EPP), muda todo mês
 
     # Certificado A1 (a SENHA fica no cofre, não aqui)
     caminho_certificado_pfx: str = ""
@@ -229,6 +230,7 @@ class ConfiguracaoApp:
                 tipo_retencao_issqn=self.servico_ret_issqn,
                 indicador_total_tributos=self.servico_ind_tot_trib,
                 aliquota_iss=Decimal(self.iss_aliquota) if self.iss_aliquota.strip() else None,
+                percentual_tributos_sn=_decimal_ou_none(self.servico_ptottribsn),
             ),
             caminho_pfx=Path(self.caminho_certificado_pfx) if self.caminho_certificado_pfx else None,
             senha_pfx=senha_certificado if senha_certificado is not None
@@ -299,12 +301,29 @@ class ConfiguracaoApp:
             faltando.append("Código IBGE do município de emissão (7 dígitos).")
         if self.email_enviar and not self.email_remetente:
             faltando.append("E-mail remetente (o envio automático está ligado).")
+        if self.prestador_simples_nacional == 3:
+            percentual = _decimal_ou_none(self.servico_ptottribsn)
+            if percentual is None or not (0 <= percentual < 100):
+                faltando.append(
+                    "Percentual do Simples Nacional (ex.: 8.63) — o contador informa "
+                    "todo mês; a Sefin exige para ME/EPP."
+                )
         if self.iss_aliquota.strip():
             try:
                 Decimal(self.iss_aliquota)
             except Exception:
                 faltando.append(f"Alíquota de ISS inválida: {self.iss_aliquota!r}")
         return faltando
+
+
+def _decimal_ou_none(texto: str) -> Decimal | None:
+    texto = (texto or "").strip().replace(",", ".")
+    if not texto:
+        return None
+    try:
+        return Decimal(texto)
+    except InvalidOperation:
+        return None
 
 
 # ---------------------------------------------------------------------------

@@ -110,6 +110,12 @@ class ParametrosServico:
     # deixe None nesse caso. Consulte o contador.
     aliquota_iss: Decimal | None = None
 
+    # pTotTribSN — percentual aproximado dos tributos pela alíquota do Simples
+    # Nacional (ex.: Decimal("8.63")). Obrigatório para optante ME/EPP: a Sefin
+    # recusa indTotTrib nesse caso (E0712). Muda todo mês com o faturamento
+    # acumulado — é o percentual que o contador informa.
+    percentual_tributos_sn: Decimal | None = None
+
 
 @dataclass
 class Configuracao:
@@ -184,6 +190,10 @@ def carregar_configuracao() -> Configuracao:
             tributacao_issqn=int(os.getenv("SERVICO_TRIB_ISSQN", "1")),
             tipo_retencao_issqn=int(os.getenv("SERVICO_RET_ISSQN", "1")),
             indicador_total_tributos=int(os.getenv("SERVICO_IND_TOT_TRIB", "0")),
+            percentual_tributos_sn=(
+                Decimal(os.getenv("SERVICO_PTOTTRIBSN").replace(",", "."))
+                if os.getenv("SERVICO_PTOTTRIBSN", "").strip() else None
+            ),
             aliquota_iss=Decimal(aliquota) if aliquota else None,
         ),
         caminho_pfx=_caminho_opcional(os.getenv("CERT_PFX")),

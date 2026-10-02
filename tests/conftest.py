@@ -58,7 +58,7 @@ def config(tmp_path: Path) -> Configuracao:
             inscricao_municipal="1234567",
             codigo_municipio="3304557",
         ),
-        servico=ParametrosServico(aliquota_iss=Decimal("2.00")),
+        servico=ParametrosServico(aliquota_iss=Decimal("2.00"), percentual_tributos_sn=Decimal("8.63")),
         caminho_pfx=None,
         senha_pfx=None,
         caminho_certificado=None,

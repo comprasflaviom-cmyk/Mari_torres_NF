@@ -163,6 +163,9 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         config.servico_ret_issqn = numero("servico_ret_issqn", config.servico_ret_issqn)
         config.servico_ind_tot_trib = numero("servico_ind_tot_trib", config.servico_ind_tot_trib)
         config.iss_aliquota = texto("iss_aliquota").replace(",", ".")
+        config.servico_ptottribsn = texto("servico_ptottribsn", config.servico_ptottribsn).replace(
+            "%", ""
+        ).replace(",", ".").strip()
 
         config.serie_dps = texto("serie_dps", config.serie_dps) or "1"
         config.numero_dps_inicial = numero("numero_dps_inicial", config.numero_dps_inicial)

@@ -150,11 +150,24 @@ def montar_dps(
         # deixe ISS_ALIQUOTA vazio no .env nesse caso.
         tributacao_municipal["pAliq"] = f"{serv.aliquota_iss.quantize(Decimal('0.01')):f}"
 
+    # totTrib é um choice (vTotTrib | pTotTrib | indTotTrib | pTotTribSN). Para
+    # optante ME/EPP a Sefin proíbe indTotTrib (rejeição real E0712) — vai o
+    # percentual do Simples Nacional.
+    if prest.opcao_simples_nacional == 3:
+        if serv.percentual_tributos_sn is None:
+            raise ErroDPS(
+                "Optante do Simples (ME/EPP) precisa do percentual do Simples Nacional "
+                "na Configuração — o que o contador informa todo mês."
+            )
+        tot_trib = {"pTotTribSN": f"{serv.percentual_tributos_sn.quantize(Decimal('0.01')):f}"}
+    else:
+        tot_trib = {"indTotTrib": serv.indicador_total_tributos}
+
     bloco_valores = {
         "vServPrest": {"vServ": _valor(linha.valor_servico)},
         "trib": {
             "tribMun": tributacao_municipal,
-            "totTrib": {"indTotTrib": serv.indicador_total_tributos},
+            "totTrib": tot_trib,
         },
     }
 

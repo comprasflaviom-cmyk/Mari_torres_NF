@@ -54,6 +54,7 @@ def dados_app(tmp_path, monkeypatch):
 
     ac.salvar(ac.ConfiguracaoApp(
         prestador_cnpj="11222333000181",
+        servico_ptottribsn="8.63",
         caminho_certificado_pfx=str(pfx),
         diretorio_notas=str(tmp_path / "notas"),
         diretorio_logs=str(tmp_path / "logs"),
@@ -626,6 +627,17 @@ def test_codigos_de_tributacao_colados_do_portal_sao_normalizados(cliente):
     assert config.servico_ctribmun == "001"
     assert config.para_configuracao().servico.codigo_tributacao_municipal == "001"
     assert config.pendencias() == []
+
+
+def test_percentual_do_simples_aceita_virgula_e_simbolo(cliente):
+    cliente.post(
+        "/configuracao", headers={NOME_HEADER: TOKEN},
+        data={"prestador_cnpj": "11222333000181", "servico_ptottribsn": "8,63%"},
+        follow_redirects=False,
+    )
+    config = ac.carregar()
+    assert config.servico_ptottribsn == "8.63"
+    assert str(config.para_configuracao().servico.percentual_tributos_sn) == "8.63"
 
 
 def test_serie_do_emissor_web_vira_pendencia(dados_app):

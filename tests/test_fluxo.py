@@ -158,6 +158,31 @@ def test_ctribmun_vai_entre_ctribnac_e_descricao(config, linha):
     assert c_serv.find("n:cTribMun", NS).text == "001"
 
 
+def test_me_epp_informa_percentual_do_simples_e_nao_o_indicador(config, linha):
+    """Rejeição real E0712: para ME/EPP a Sefin proíbe indTotTrib."""
+    raiz = etree.fromstring(dps_para_xml(montar_dps(config, linha, 1)))
+    tot = raiz.find("n:infDPS/n:valores/n:trib/n:totTrib", NS)
+    assert [etree.QName(f).localname for f in tot] == ["pTotTribSN"]
+    assert tot.find("n:pTotTribSN", NS).text == "8.63"
+
+
+def test_nao_optante_mantem_o_indicador(config, linha):
+    from dataclasses import replace
+
+    config.prestador = replace(config.prestador, opcao_simples_nacional=1)
+    raiz = etree.fromstring(dps_para_xml(montar_dps(config, linha, 1)))
+    tot = raiz.find("n:infDPS/n:valores/n:trib/n:totTrib", NS)
+    assert [etree.QName(f).localname for f in tot] == ["indTotTrib"]
+
+
+def test_me_epp_sem_percentual_para_antes_de_transmitir(config, linha):
+    from dataclasses import replace
+
+    config.servico = replace(config.servico, percentual_tributos_sn=None)
+    with pytest.raises(ErroDPS, match="percentual do Simples"):
+        montar_dps(config, linha, 1)
+
+
 def test_sem_ctribmun_o_campo_e_omitido(config, linha):
     raiz = etree.fromstring(dps_para_xml(montar_dps(config, linha, 1)))
     c_serv = raiz.find("n:infDPS/n:serv/n:cServ", NS)

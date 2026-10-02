@@ -189,6 +189,13 @@
         <span class="dica">Deixe em branco se optante do Simples Nacional.</span>
       </div>
       <div class="campo">
+        <label for="servico_ptottribsn">Percentual do Simples Nacional (%)</label>
+        <input type="text" id="servico_ptottribsn" name="servico_ptottribsn"
+               value="{{ config.servico_ptottribsn }}" placeholder="ex.: 8,63">
+        <span class="dica"><strong>Atualize todo mês</strong> com o percentual que o contador
+          informa. Obrigatório para ME/EPP — sem ele a Sefin recusa a nota (<span class="mono">E0712</span>).</span>
+      </div>
+      <div class="campo">
         <label for="servico_ind_tot_trib">Totais aproximados de tributos</label>
         <select id="servico_ind_tot_trib" name="servico_ind_tot_trib">
           {% for valor, rotulo in [(0,'0 — Não informa'), (1,'1 — Informa valores'), (2,'2 — Sem valor')] %}

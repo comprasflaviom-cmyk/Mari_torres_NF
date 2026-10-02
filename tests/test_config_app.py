@@ -49,6 +49,7 @@ def _config_valida(tmp_path) -> ac.ConfiguracaoApp:
         prestador_cnpj="11222333000181",
         caminho_certificado_pfx=str(pfx),
         iss_aliquota="2.00",
+        servico_ptottribsn="8.63",
         email_enviar=True,
         email_remetente="eu@empresa.com.br",
         email_bcc=["contador@escritorio.com.br"],
