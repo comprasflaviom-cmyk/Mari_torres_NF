@@ -469,11 +469,31 @@ def test_importacao_da_planilha_completa_pelo_cadastro(cliente):
     assert "Logradouro" in previa.do_cadastro
 
 
-def test_planilha_de_cliente_nao_cadastrado_segue_normal(cliente):
+def test_planilha_cadastra_clientes_novos(cliente):
+    """A planilha vive só na memória; o cadastro é que sobrevive ao app fechar.
+    Antes, os clientes "sumiam" ao trocar a pasta do programa."""
+    from app.rotas_clientes import repositorio_clientes
+
+    resposta = cliente.post(
+        "/importar", headers={NOME_HEADER: TOKEN}, follow_redirects=False,
+        files={"planilha": ("faturamento.xlsx", _planilha([LINHA_BOA]))},
+    )
+    assert resposta.headers["location"] == "/emitir?novos=1"
+
+    salvo = repositorio_clientes().buscar("11222333000181")
+    assert salvo is not None and salvo.razao_social == "Cliente Alfa"
+    assert salvo.email == "alfa@exemplo.com.br" and salvo.receber_por_email is True
+    assert "1 cliente(s) novo(s)" in cliente.get("/emitir?novos=1").text
+
+
+def test_planilha_nao_sobrescreve_cliente_ja_cadastrado(cliente):
+    from app.rotas_clientes import repositorio_clientes
+
+    _cadastrar(cliente, razao_social="Nome ajustado à mão", email="certo@cliente.com.br")
     _importar(cliente)
-    previa = ESTADO.importacao.validas[0]
-    assert previa.cliente_ativo is None
-    assert previa.do_cadastro == []
+    salvo = repositorio_clientes().buscar("11222333000181")
+    assert salvo.razao_social == "Nome ajustado à mão"
+    assert salvo.email == "certo@cliente.com.br"
 
 
 # ---------------------------------------------------------------------------

@@ -3,6 +3,13 @@
 {% block conteudo %}
 <h1>Emitir notas</h1>
 
+{% if clientes_novos %}
+  <div class="aviso aviso-ok">
+    <strong>{{ clientes_novos }} cliente(s) novo(s) da planilha foram salvos no cadastro.</strong>
+    Eles ficam guardados mesmo depois de fechar o app — confira em <a href="/clientes">Clientes</a>.
+  </div>
+{% endif %}
+
 {% if not importacao %}
   <div class="cartao vazio">
     <p>Nenhuma planilha importada.</p>

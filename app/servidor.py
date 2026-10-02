@@ -32,7 +32,7 @@ from nfse.estado import ControleEmissao
 from nfse.email_envio import ErroEmail, enviar_nfse
 from nfse.planilha import ErroPlanilha
 from nfse.backup import Espelho
-from nfse.clientes import completar_com_cadastro
+from nfse.clientes import Cliente, ErroCadastro, completar_com_cadastro
 from nfse.estado import nome_da_maquina
 from nfse.servico import OpcoesEmissao, montar_emissor
 
@@ -388,20 +388,22 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
             caminho.unlink(missing_ok=True)
             return pagina(requisicao, "importar.html", importacao=None, erro=str(exc))
 
+        novos = _cadastrar_clientes_novos(ESTADO.importacao)
         _completar_com_cadastro(ESTADO.importacao)
 
         config = _carregar_config_tolerante()
         config.ultima_planilha = str(caminho)
         ac.salvar(config)
-        return RedirectResponse("/emitir", status_code=303)
+        return RedirectResponse(f"/emitir?novos={novos}" if novos else "/emitir", status_code=303)
 
     # ------------------------------------------------------------------
     # Emissão
     # ------------------------------------------------------------------
     @app.get("/emitir", response_class=HTMLResponse)
-    def tela_emitir(requisicao: Request):
+    def tela_emitir(requisicao: Request, novos: int = 0):
         return pagina(
             requisicao, "emitir.html",
+            clientes_novos=novos,
             importacao=ESTADO.importacao,
             trabalho=ESTADO.trabalho.resumo(),
             competencia_padrao=date.today().strftime("%Y-%m"),
@@ -627,6 +629,43 @@ def _situacao_certificado(config: ac.ConfiguracaoApp) -> dict:
         "dias": certificado.dias_para_vencer,
         "alerta": certificado.dias_para_vencer < 30,
     }
+
+
+def _cadastrar_clientes_novos(importacao) -> int:
+    """Cadastra os clientes da planilha que ainda não estão no cadastro.
+
+    A planilha só vive na memória (some quando o app fecha); o cadastro é o
+    que fica. Quem já está cadastrado não é tocado — o cadastro é a fonte da
+    verdade, e a planilha de um mês não deve sobrescrever o que foi ajustado
+    à mão. Devolve quantos foram cadastrados.
+    """
+    repo = repositorio_clientes()
+    novos = 0
+    for previa in importacao.validas:
+        linha = previa.linha
+        if linha is None or repo.buscar(linha.documento_tomador) is not None:
+            continue
+        extras = linha.extras
+        cliente = Cliente(
+            documento=linha.documento_tomador,
+            razao_social=linha.razao_social,
+            email=linha.email,
+            logradouro=extras.get("Logradouro", ""),
+            numero=extras.get("Numero", ""),
+            complemento=extras.get("Complemento", ""),
+            bairro=extras.get("Bairro", ""),
+            cod_municipio=extras.get("Cod_Municipio", ""),
+            uf=extras.get("UF", ""),
+            cep=extras.get("CEP", ""),
+            telefone=extras.get("Telefone", ""),
+            receber_por_email=bool(linha.email),
+        )
+        try:
+            repo.salvar(cliente)
+            novos += 1
+        except ErroCadastro:
+            continue  # dado incompleto: a linha ainda é emitida, só não vira cadastro
+    return novos
 
 
 def _completar_com_cadastro(importacao) -> None:
