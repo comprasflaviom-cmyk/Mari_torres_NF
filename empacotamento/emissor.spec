@@ -30,6 +30,18 @@ dados = [
     (str(RAIZ / "app" / "static"), "app/static"),
 ]
 
+# Pasta vazia não dá erro no PyInstaller — ele só não copia nada, e o .exe
+# quebra ao abrir. Acontece ao gerar de dentro do Google Drive/OneDrive, que
+# deixa arquivos "só online". Melhor parar aqui do que entregar um .exe torto.
+for origem, _ in dados:
+    pasta = Path(origem)
+    if not pasta.is_dir() or not any(p.is_file() and p.stat().st_size for p in pasta.iterdir()):
+        raise SystemExit(
+            f"\nERRO: {pasta} está ausente, vazia ou com arquivos não baixados.\n"
+            "Gere o executável a partir de uma pasta local (ex.: C:\\EmissorBuild), "
+            "fora do Google Drive/OneDrive.\n"
+        )
+
 # O keyring e o pystray escolhem o backend em tempo de execução — o Gerenciador
 # de Credenciais e a bandeja do Windows, respectivamente — e o PyInstaller não
 # enxerga esse tipo de import na análise estática.
