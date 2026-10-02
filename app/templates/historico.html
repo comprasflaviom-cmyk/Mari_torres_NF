@@ -43,7 +43,13 @@
         <td class="mono">{{ nota.documento or '—' }}</td>
         <td class="numerico">{{ nota.valor_servico | moeda }}</td>
         <td class="mono" style="word-break:break-all">{{ nota.chave_acesso or '—' }}</td>
-        <td class="discreto mono" style="word-break:break-all">{{ nota.pasta }}</td>
+        <td>
+          {% if nota.chave_acesso %}
+            <a class="botao botao-pequeno" href="/danfse/{{ nota.chave_acesso }}" target="_blank"
+               title="Abre o PDF; se ainda não existir, gera a partir do XML">PDF</a>
+          {% endif %}
+          <span class="discreto mono" style="word-break:break-all">{{ nota.pasta }}</span>
+        </td>
       </tr>
       {% endfor %}
     </tbody>

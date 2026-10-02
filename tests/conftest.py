@@ -88,3 +88,48 @@ def linha() -> LinhaFaturamento:
             "Logradouro": "Av. Rio Branco", "Numero": "156", "Bairro": "Centro",
         },
     )
+
+
+CHAVE_EXEMPLO = "33045572224465499000170000000000008426102498851380"
+
+
+def montar_nfse_xml(config: Configuracao, linha: LinhaFaturamento, chave: str = CHAVE_EXEMPLO) -> bytes:
+    """XML de NFS-e autorizada, como a Sefin devolve: a DPS do app embrulhada
+    nos campos que a Sefin acrescenta (número, município por extenso, emit...).
+    Base para testar o DANFSe sem depender da rede."""
+    from datetime import date
+
+    from lxml import etree
+
+    from nfse.config import NAMESPACE_DPS
+    from nfse.dps import dps_para_xml, montar_dps
+
+    dps = etree.fromstring(dps_para_xml(montar_dps(config, linha, 1, competencia=date(2026, 10, 1))))
+    n = NAMESPACE_DPS
+    raiz = etree.Element(f"{{{n}}}NFSe", nsmap={None: n}, versao="1.01")
+    inf = etree.SubElement(raiz, f"{{{n}}}infNFSe", Id="NFS" + chave)
+
+    def el(pai, tag, texto=None):
+        no = etree.SubElement(pai, f"{{{n}}}{tag}")
+        no.text = texto
+        return no
+
+    for tag, texto in (
+        ("xLocEmi", "Rio de Janeiro"), ("xLocPrestacao", "Rio de Janeiro"), ("nNFSe", "84"),
+        ("cLocIncid", "3304557"), ("xLocIncid", "Rio de Janeiro"),
+        ("xTribNac", "Assessoria ou consultoria de qualquer natureza."),
+        ("verAplic", "SefinNac"), ("ambGer", "2"), ("tpEmis", "1"), ("procEmi", "1"),
+        ("cStat", "100"), ("dhProc", "2026-10-02T16:41:12-03:00"), ("nDFSe", "1"),
+    ):
+        el(inf, tag, texto)
+    emit = el(inf, "emit")
+    el(emit, "CNPJ", config.prestador.cnpj)
+    el(emit, "xNome", "EMPRESA TESTE LTDA")
+    end = el(emit, "enderNac")
+    for tag, texto in (("xLgr", "RUA DO PRESTADOR"), ("nro", "60"), ("xBairro", "LEBLON"),
+                       ("cMun", "3304557"), ("UF", "RJ"), ("CEP", "22430130")):
+        el(end, tag, texto)
+    valores = el(inf, "valores")
+    el(valores, "vLiq", str(linha.valor_servico))
+    inf.append(dps)
+    return etree.tostring(raiz, xml_declaration=True, encoding="UTF-8")

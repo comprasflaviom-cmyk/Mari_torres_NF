@@ -8,7 +8,7 @@ from typing import Any
 
 import requests
 
-from .config import Configuracao, ROTA_CONSULTA_CHAVE, ROTA_DANFSE, ROTA_EMISSAO
+from .config import Configuracao, ROTA_CONSULTA_CHAVE, ROTA_EMISSAO
 
 
 @dataclass
@@ -86,16 +86,6 @@ class ClienteNFSe:
         resposta = self._requisitar_com_retentativa("GET", url)
         if resposta.status_code == 200:
             return resposta.json()
-        return None
-
-    def baixar_danfse(self, chave_acesso: str) -> bytes | None:
-        """GET /danfse/{chave} — PDF da DANFSe. Devolve None se indisponível."""
-        url = f"{self.base}{ROTA_DANFSE.format(chave=chave_acesso)}"
-        resposta = self._requisitar_com_retentativa(
-            "GET", url, headers={"Accept": "application/pdf"}
-        )
-        if resposta.status_code == 200 and resposta.content[:4] == b"%PDF":
-            return resposta.content
         return None
 
     # -- Infraestrutura -----------------------------------------------------

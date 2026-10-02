@@ -128,9 +128,13 @@ Trocados pela variável `AMBIENTE` no `.env` (ou `--ambiente` na linha de comand
 | `homologacao`  | `https://sefin.producaorestrita.nfse.gov.br/SefinNacional` | 2 | Produção restrita: notas **sem valor fiscal** |
 | `producao`     | `https://sefin.nfse.gov.br/sefinnacional`                  | 1 | Notas **com valor fiscal real** |
 
-Rotas usadas: `POST /nfse` (emissão), `GET /nfse/{chave}` (consulta),
-`GET /danfse/{chave}` (PDF). Estão em `nfse/config.py` — se o layout mudar,
-altere lá, num lugar só.
+Rotas usadas: `POST /nfse` (emissão) e `GET /nfse/{chave}` (consulta). Estão
+em `nfse/config.py` — se o layout mudar, altere lá, num lugar só.
+
+O PDF (DANFSe) é **gerado localmente** a partir do XML da nota autorizada,
+no leiaute da Nota Técnica SE/CGNFS-e nº 008/2026 (`nfse/danfse.py`): a API
+de download da Sefin foi desligada em 03/08/2026. No aplicativo, o botão
+**PDF** do Histórico gera ou reabre o DANFSe de qualquer nota já arquivada.
 
 **Sempre valide em homologação antes de virar a chave.** NFS-e emitida em
 produção só se desfaz por cancelamento formal, com prazo e regra municipal.
@@ -178,7 +182,7 @@ python -m nfse.main --ambiente producao
 # Outras opções
 python -m nfse.main --competencia 2026-08   # mês de referência do serviço
 python -m nfse.main --linhas 2,5,7          # só estas linhas do Excel
-python -m nfse.main --sem-pdf               # não baixa a DANFSe
+python -m nfse.main --sem-pdf               # não gera o PDF (DANFSe)
 python -m nfse.main --sem-email             # não envia ao cliente nesta execução
 python -m nfse.main --reemitir              # ignora o controle de duplicidade
 ```

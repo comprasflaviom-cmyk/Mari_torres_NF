@@ -6,6 +6,7 @@ cryptography>=42.0     # leitura do certificado A1 (.pfx/.p12 e PEM)
 lxml>=5.0              # XML + assinatura XMLDSig (montada manualmente em nfse/assinatura.py)
 python-dotenv>=1.0     # carrega credenciais do arquivo .env (modo linha de comando)
 keyring>=25.0          # guarda as senhas no cofre do sistema (modo interface gráfica)
+reportlab>=4.0         # gera o PDF do DANFSe localmente (NT 008/2026)
 
 # --- Interface gráfica (aplicativo instalado no laptop) ---
 fastapi>=0.115         # servidor da interface, rodando só em 127.0.0.1

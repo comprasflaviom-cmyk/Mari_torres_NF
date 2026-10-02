@@ -20,7 +20,7 @@ Inno Setup usando `empacotamento/instalador.iss`.
 
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 RAIZ = Path(SPECPATH).parent
 
@@ -28,6 +28,7 @@ RAIZ = Path(SPECPATH).parent
 dados = [
     (str(RAIZ / "app" / "templates"), "app/templates"),
     (str(RAIZ / "app" / "static"), "app/static"),
+    (str(RAIZ / "nfse" / "dados"), "nfse/dados"),   # logo e municípios do DANFSe
 ]
 
 # Pasta vazia não dá erro no PyInstaller — ele só não copia nada, e o .exe
@@ -42,6 +43,9 @@ for origem, _ in dados:
             "fora do Google Drive/OneDrive.\n"
         )
 
+# Fontes e recursos que o reportlab (PDF do DANFSe) carrega de arquivo.
+dados += collect_data_files("reportlab")
+
 # O keyring e o pystray escolhem o backend em tempo de execução — o Gerenciador
 # de Credenciais e a bandeja do Windows, respectivamente — e o PyInstaller não
 # enxerga esse tipo de import na análise estática.
@@ -50,6 +54,7 @@ ocultos = (
     + collect_submodules("uvicorn")
     + collect_submodules("pystray")
     + collect_submodules("PIL")
+    + collect_submodules("reportlab")
     + [
         "win32timezone",          # exigido pelo backend do keyring no Windows
         "email.mime.application",

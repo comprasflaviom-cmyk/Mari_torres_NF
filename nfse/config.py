@@ -44,7 +44,8 @@ ENDPOINTS = {
 # Rotas do contrato REST da Sefin Nacional
 ROTA_EMISSAO = "/nfse"                     # POST  -> envia a DPS
 ROTA_CONSULTA_CHAVE = "/nfse/{chave}"      # GET   -> consulta NFS-e pela chave
-ROTA_DANFSE = "/danfse/{chave}"            # GET   -> PDF (DANFSe) da nota
+# Não há rota de DANFSe: a API de download foi desligada em 03/08/2026 (NT
+# 008/2026) e o PDF passou a ser gerado localmente — ver nfse/danfse.py.
 
 VERSAO_APLICATIVO = "1.00"   # verAplic — identificação do seu emissor
 VERSAO_LAYOUT = "1.01"       # atributo versao do elemento <DPS> — aceita "1.00" ou "1.01"

@@ -640,6 +640,25 @@ def test_percentual_do_simples_aceita_virgula_e_simbolo(cliente):
     assert str(config.para_configuracao().servico.percentual_tributos_sn) == "8.63"
 
 
+def test_historico_gera_e_abre_o_pdf_de_nota_ja_arquivada(cliente, dados_app, config, linha):
+    """Nota autorizada sem PDF (a API da Sefin foi desligada): o botão PDF do
+    Histórico gera o DANFSe a partir do XML arquivado."""
+    from tests.conftest import CHAVE_EXEMPLO, montar_nfse_xml
+
+    pasta = dados_app / "notas" / "2026" / "10-outubro"
+    pasta.mkdir(parents=True)
+    (pasta / f"{CHAVE_EXEMPLO}_11222333000181_nfse.xml").write_bytes(montar_nfse_xml(config, linha))
+
+    resposta = cliente.get(f"/danfse/{CHAVE_EXEMPLO}")
+    assert resposta.status_code == 200
+    assert resposta.headers["content-type"] == "application/pdf"
+    assert resposta.content[:4] == b"%PDF"
+    assert (pasta / f"{CHAVE_EXEMPLO}_11222333000181_danfse.pdf").exists()
+
+    assert cliente.get("/danfse/0000").status_code == 404
+    assert cliente.get("/danfse/..%2F..%2Fsegredo").status_code in (400, 404)
+
+
 def test_serie_do_emissor_web_vira_pendencia(dados_app):
     """Rejeição real E0010: série 70000 é a faixa do emissor web do portal;
     aplicativo próprio só pode usar 1-49999."""
@@ -674,9 +693,6 @@ class _ClienteNFSeFalso:
 
     def emitir(self, pacote: str) -> RespostaEmissao:
         return self.respostas.pop(0)
-
-    def baixar_danfse(self, chave: str) -> bytes:
-        return b"%PDF-1.4 conteudo"
 
 
 def _emissor_falso(config_app: ac.ConfiguracaoApp, chave: str = "CHAVE-REC1") -> Emissor:

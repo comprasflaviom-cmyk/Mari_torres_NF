@@ -23,6 +23,7 @@ from .assinatura import assinar_dps, empacotar_para_envio
 from .certificado import CertificadoA1, carregar_certificado, criar_sessao_mtls
 from .cliente import ClienteNFSe
 from .config import Configuracao
+from .danfse import gerar_danfse
 from .dps import dps_para_xml, montar_dps
 from .email_envio import ConfiguracaoEmail, ErroEmail, enviar_nfse
 from .estado import ConflitoDeMaquina, ControleEmissao, impressao_da_linha, nome_da_maquina
@@ -57,7 +58,7 @@ class OpcoesEmissao:
     competencia: date
     dry_run: bool = False
     reemitir: bool = False
-    baixar_pdf: bool = True
+    gerar_pdf: bool = True
     # Números de linha do Excel a processar. None = todas.
     linhas_selecionadas: set[int] | None = None
 
@@ -269,15 +270,14 @@ class Emissor:
         self, linha, opcoes, resposta, xml_assinado, impressao,
         numero_dps, registro, rotulo, ao_progredir, contexto,
     ) -> None:
-        """Baixa o PDF, arquiva, registra a numeração e envia ao cliente."""
+        """Gera o PDF, arquiva, registra a numeração e envia ao cliente."""
         pdf = None
-        if opcoes.baixar_pdf and resposta.chave_acesso:
+        if opcoes.gerar_pdf and resposta.xml_nfse:
             try:
-                pdf = self.cliente.baixar_danfse(resposta.chave_acesso)
-            except RuntimeError as exc:
-                # PDF é acessório: a nota já está autorizada.
+                pdf = gerar_danfse(resposta.xml_nfse)
+            except Exception as exc:  # noqa: BLE001 — PDF é acessório: a nota já está autorizada
                 ao_progredir(EventoProgresso(
-                    tipo="aviso", mensagem=f"DANFSe indisponível: {exc}", **contexto
+                    tipo="aviso", mensagem=f"DANFSe não gerado: {exc}", **contexto
                 ))
 
         arquivos = salvar_nota(

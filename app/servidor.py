@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import shutil
 from datetime import date, datetime
@@ -17,13 +18,16 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from starlette.datastructures import UploadFile as ArquivoDeFormulario
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from nfse import armazenamento_config as ac
 from nfse.certificado import ErroCertificado, carregar_certificado, criar_sessao_mtls
 from nfse.config import ROTA_CONSULTA_CHAVE
+from nfse.danfse import gerar_danfse_do_arquivo
 from nfse.estado import ControleEmissao
 from nfse.email_envio import ErroEmail, enviar_nfse
 from nfse.planilha import ErroPlanilha
@@ -451,7 +455,7 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
             competencia=competencia_data,
             dry_run=dry_run,
             reemitir=reemitir in ("on", "true", "1"),
-            baixar_pdf=sem_pdf not in ("on", "true", "1"),
+            gerar_pdf=sem_pdf not in ("on", "true", "1"),
         )
 
         try:
@@ -509,6 +513,30 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         config = _carregar_config_tolerante()
         total = repositorio_emissoes().reconstruir(config.para_configuracao().diretorio_notas)
         return RedirectResponse(f"/historico?reconstruido={total}", status_code=303)
+
+    @app.get("/danfse/{chave}")
+    def abrir_danfse(chave: str):
+        """Abre o PDF da nota; se ainda não existir, gera a partir do XML arquivado.
+
+        Cobre as notas autorizadas antes da geração local existir (a API de
+        download da Sefin foi desligada em 03/08/2026) e qualquer PDF apagado.
+        """
+        if not re.fullmatch(r"[A-Za-z0-9-]{1,60}", chave):
+            return HTMLResponse("Chave inválida.", status_code=400)
+        notas = _carregar_config_tolerante().para_configuracao().diretorio_notas
+        xmls = sorted(Path(notas).rglob(f"{chave}_*_nfse.xml")) if Path(notas).exists() else []
+        if not xmls:
+            return HTMLResponse(
+                f"O XML da NFS-e {chave} não está na pasta de notas ({notas}).", status_code=404
+            )
+        pdf = xmls[0].with_name(xmls[0].name.replace("_nfse.xml", "_danfse.pdf"))
+        if not pdf.exists():
+            try:
+                gerar_danfse_do_arquivo(xmls[0])
+            except Exception as exc:  # noqa: BLE001 — mensagem na tela, não traceback
+                return HTMLResponse(f"Não foi possível gerar o DANFSe: {exc}", status_code=500)
+        return FileResponse(pdf, media_type="application/pdf",
+                            headers={"Content-Disposition": f'inline; filename="{pdf.name}"'})
 
     registrar_rotas_clientes(app, pagina, _carregar_config_tolerante)
     registrar_rotas_recorrencias(app, pagina, _carregar_config_tolerante)

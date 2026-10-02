@@ -11,3 +11,6 @@ pytest>=8.0
 # do httpx antigo) — sem ele, a coleta dos testes falha com:
 #   RuntimeError: The starlette.testclient module requires the httpx2 package
 httpx2
+
+# Lê o texto do DANFSe gerado, para os testes conferirem o conteúdo do PDF.
+pypdf

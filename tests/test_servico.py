@@ -8,6 +8,7 @@ from decimal import Decimal
 import pytest
 
 from nfse.cliente import RespostaEmissao
+from nfse.config import NAMESPACE_DPS
 from nfse.email_envio import ConfiguracaoEmail
 from nfse.estado import ControleEmissao, impressao_da_linha
 from nfse.planilha import LinhaFaturamento
@@ -22,21 +23,17 @@ class ClienteFalso:
     def __init__(self, respostas: list[RespostaEmissao]):
         self.respostas = list(respostas)
         self.enviados: list[str] = []
-        self.pdfs_pedidos: list[str] = []
 
     def emitir(self, pacote: str) -> RespostaEmissao:
         self.enviados.append(pacote)
         return self.respostas.pop(0)
 
-    def baixar_danfse(self, chave: str) -> bytes:
-        self.pdfs_pedidos.append(chave)
-        return b"%PDF-1.4 conteudo"
-
 
 def _autorizada(chave: str, alertas: list[str] | None = None) -> RespostaEmissao:
     return RespostaEmissao(
         autorizada=True, status_http=201, chave_acesso=chave, id_dps="DPS" + chave,
-        xml_nfse=b"<NFSe/>", mensagens=alertas or [],
+        xml_nfse=f'<NFSe xmlns="{NAMESPACE_DPS}"><infNFSe Id="NFS{chave}"/></NFSe>'.encode(),
+        mensagens=alertas or [],
     )
 
 
@@ -82,12 +79,12 @@ def test_nota_autorizada_arquiva_e_registra_numeracao(
     assert registro.situacao == "AUTORIZADA"
     assert registro.chave_acesso == "CHAVE1"
     assert registro.numero_dps == "1"
-    assert cliente.pdfs_pedidos == ["CHAVE1"]
 
     # Arquivos gravados na pasta do mês da competência.
     pasta = config.diretorio_notas / "2026" / "09-setembro"
     assert (pasta / "CHAVE1_11222333000181_nfse.xml").exists()
-    assert (pasta / "CHAVE1_11222333000181_danfse.pdf").exists()
+    # DANFSe gerado localmente (a API de download da Sefin foi desligada).
+    assert (pasta / "CHAVE1_11222333000181_danfse.pdf").read_bytes()[:4] == b"%PDF"
     assert (pasta / "CHAVE1_11222333000181_dps-assinada.xml").exists()
 
     # A numeração foi consumida e persistida.
@@ -271,15 +268,15 @@ def test_pdf_indisponivel_nao_invalida_a_nota(
     """DANFSe é acessório: a nota já está autorizada na Sefin."""
     emissor, cliente = _montar(config, certificado_teste, email_desligado, [_autorizada("CHAVE1")])
     monkeypatch.setattr(
-        cliente, "baixar_danfse",
-        lambda chave: (_ for _ in ()).throw(RuntimeError("servidor fora do ar")),
+        "nfse.servico.gerar_danfse",
+        lambda xml: (_ for _ in ()).throw(RuntimeError("XML inesperado")),
     )
     eventos: list[EventoProgresso] = []
 
     registro = emissor.emitir_uma(linha, OpcoesEmissao(competencia=COMPETENCIA), eventos.append)
 
     assert registro.situacao == "AUTORIZADA"
-    assert any("DANFSe indisponível" in e.mensagem for e in eventos if e.tipo == "aviso")
+    assert any("DANFSe não gerado" in e.mensagem for e in eventos if e.tipo == "aviso")
 
 
 # ---------------------------------------------------------------------------

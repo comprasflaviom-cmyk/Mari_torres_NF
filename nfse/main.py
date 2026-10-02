@@ -54,7 +54,7 @@ def _argumentos() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true",
                         help="Monta e assina a DPS, salva o XML localmente e NÃO envia à Sefin.")
     parser.add_argument("--sem-pdf", action="store_true",
-                        help="Não baixa a DANFSe em PDF após autorizar.")
+                        help="Não gera o PDF (DANFSe) após autorizar.")
     parser.add_argument("--sem-email", action="store_true",
                         help="Não envia a nota ao cliente por e-mail nesta execução.")
     parser.add_argument("--reemitir", action="store_true",
@@ -165,7 +165,7 @@ def executar() -> int:
         competencia=competencia,
         dry_run=args.dry_run,
         reemitir=args.reemitir,
-        baixar_pdf=not args.sem_pdf,
+        gerar_pdf=not args.sem_pdf,
         linhas_selecionadas=(
             {int(n) for n in args.linhas.split(",") if n.strip()} if args.linhas else None
         ),
