@@ -146,6 +146,24 @@ def test_xml_respeita_a_ordem_do_schema(config, linha):
     assert tags_trib_mun == ["tribISSQN", "tpRetISSQN", "pAliq"]
 
 
+def test_ctribmun_vai_entre_ctribnac_e_descricao(config, linha):
+    """Rejeição real E0312 em produção: o Rio administra o 17.03.03 por código
+    complementar municipal, e a nota sem cTribMun era recusada."""
+    from dataclasses import replace
+
+    config.servico = replace(config.servico, codigo_tributacao_municipal="001")
+    raiz = etree.fromstring(dps_para_xml(montar_dps(config, linha, 1)))
+    c_serv = raiz.find("n:infDPS/n:serv/n:cServ", NS)
+    assert [etree.QName(f).localname for f in c_serv] == ["cTribNac", "cTribMun", "xDescServ"]
+    assert c_serv.find("n:cTribMun", NS).text == "001"
+
+
+def test_sem_ctribmun_o_campo_e_omitido(config, linha):
+    raiz = etree.fromstring(dps_para_xml(montar_dps(config, linha, 1)))
+    c_serv = raiz.find("n:infDPS/n:serv/n:cServ", NS)
+    assert [etree.QName(f).localname for f in c_serv] == ["cTribNac", "xDescServ"]
+
+
 def test_assinatura_gera_reference_para_o_id(config, linha, certificado_teste):
     xml = dps_para_xml(montar_dps(config, linha, 7))
     assinado = assinar_dps(xml, certificado_teste)

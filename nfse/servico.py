@@ -258,9 +258,11 @@ class Emissor:
         """
         if not any("E0312" in m for m in resposta.mensagens):
             return ""
+        serv = self.config.servico
         return (
-            f" [enviamos cTribNac={self.config.servico.codigo_tributacao_nacional}"
-            f" para o município {self.config.servico.codigo_municipio_prestacao}]"
+            f" [enviamos cTribNac={serv.codigo_tributacao_nacional}"
+            f" cTribMun={serv.codigo_tributacao_municipal or '(vazio)'}"
+            f" para o município {serv.codigo_municipio_prestacao}]"
         )
 
     def _concluir_autorizada(

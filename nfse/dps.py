@@ -126,12 +126,14 @@ def montar_dps(
         bloco_tomador["email"] = linha.email
 
     # ---- Serviço ----------------------------------------------------------
+    # Ordem de TCCServ: cTribNac, cTribMun (opcional), xDescServ.
+    c_serv: dict[str, Any] = {"cTribNac": serv.codigo_tributacao_nacional}
+    if serv.codigo_tributacao_municipal:
+        c_serv["cTribMun"] = serv.codigo_tributacao_municipal
+    c_serv["xDescServ"] = linha.descricao
     bloco_servico = {
         "locPrest": {"cLocPrestacao": serv.codigo_municipio_prestacao},
-        "cServ": {
-            "cTribNac": serv.codigo_tributacao_nacional,
-            "xDescServ": linha.descricao,
-        },
+        "cServ": c_serv,
     }
 
     # ---- Valores e tributação --------------------------------------------

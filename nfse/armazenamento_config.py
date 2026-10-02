@@ -160,6 +160,7 @@ class ConfiguracaoApp:
 
     # Serviço
     servico_ctribnac: str = "170101"               # LC 116, 17.01 — consultoria
+    servico_ctribmun: str = ""                     # 3 dígitos; vazio = não envia
     servico_cod_municipio: str = "3304557"
     servico_trib_issqn: int = 1
     servico_ret_issqn: int = 1
@@ -222,6 +223,7 @@ class ConfiguracaoApp:
             ),
             servico=ParametrosServico(
                 codigo_tributacao_nacional=self.servico_ctribnac,
+                codigo_tributacao_municipal=self.servico_ctribmun,
                 codigo_municipio_prestacao=self.servico_cod_municipio,
                 tributacao_issqn=self.servico_trib_issqn,
                 tipo_retencao_issqn=self.servico_ret_issqn,
@@ -277,6 +279,14 @@ class ConfiguracaoApp:
             faltando.append(f"Certificado não encontrado em {self.caminho_certificado_pfx}.")
         if not self.servico_ctribnac.strip():
             faltando.append("Código de tributação nacional (cTribNac).")
+        elif not (self.servico_ctribnac.isdigit() and len(self.servico_ctribnac) == 6):
+            faltando.append(
+                f"Código de tributação nacional deve ter 6 dígitos, sem pontos: {self.servico_ctribnac!r}."
+            )
+        if self.servico_ctribmun and not (self.servico_ctribmun.isdigit() and len(self.servico_ctribmun) == 3):
+            faltando.append(
+                f"Código complementar municipal deve ter 3 dígitos: {self.servico_ctribmun!r}."
+            )
         if len(self.prestador_cod_municipio) != 7:
             faltando.append("Código IBGE do município de emissão (7 dígitos).")
         if self.email_enviar and not self.email_remetente:

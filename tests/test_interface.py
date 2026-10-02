@@ -611,6 +611,23 @@ def test_upload_do_certificado_pela_tela(cliente, dados_app):
     assert ac.carregar().pendencias() == [], "com o certificado, não deve sobrar pendência"
 
 
+def test_codigos_de_tributacao_colados_do_portal_sao_normalizados(cliente):
+    """O portal mostra "17.03.03" e "17.03.03.001"; colado assim, o cTribNac
+    com pontos virava E0310 ("código não existe") na Sefin."""
+    cliente.post(
+        "/configuracao",
+        headers={NOME_HEADER: TOKEN},
+        data={"prestador_cnpj": "11222333000181",
+              "servico_ctribnac": "17.03.03", "servico_ctribmun": "17.03.03.001"},
+        follow_redirects=False,
+    )
+    config = ac.carregar()
+    assert config.servico_ctribnac == "170303"
+    assert config.servico_ctribmun == "001"
+    assert config.para_configuracao().servico.codigo_tributacao_municipal == "001"
+    assert config.pendencias() == []
+
+
 def test_configuracao_sem_novo_certificado_mantem_o_atual(cliente):
     anterior = ac.carregar().caminho_certificado_pfx
     cliente.post(

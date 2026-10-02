@@ -84,6 +84,13 @@ class ParametrosServico:
     #     https://www.nfse.gov.br/consultapublica/ (Consulta de Serviços)
     codigo_tributacao_nacional: str = "170101"
 
+    # cTribMun — Código de Tributação Municipal (3 dígitos). É o "Código
+    # Complementar Municipal" do portal nacional, que lá aparece com 9 dígitos
+    # (ex.: 17.03.03.001): no XML vão só os 3 últimos. Opcional no schema, mas
+    # o município que administra o serviço por complementos (o Rio faz isso)
+    # recusa a nota sem ele, com E0312. Vazio = não enviado.
+    codigo_tributacao_municipal: str = ""
+
     # cLocPrestacao — município onde o serviço é prestado (IBGE).
     # Para consultoria, em regra é o município do prestador (art. 3º da LC 116),
     # com exceções que o seu contador deve validar.
@@ -170,6 +177,7 @@ def carregar_configuracao() -> Configuracao:
         ),
         servico=ParametrosServico(
             codigo_tributacao_nacional=os.getenv("SERVICO_CTRIBNAC", "170101").strip(),
+            codigo_tributacao_municipal=os.getenv("SERVICO_CTRIBMUN", "").strip(),
             codigo_municipio_prestacao=os.getenv(
                 "SERVICO_COD_MUNICIPIO", "3304557"
             ).strip(),

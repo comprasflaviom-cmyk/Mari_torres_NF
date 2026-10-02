@@ -155,6 +155,12 @@
         <span class="dica">São 6 dígitos: 4 do subitem da LC 116 + 2 do desdobro. Ex.: 1701 (consultoria/assessoria) + 00 = <span class="mono">170100</span>. Se o município não usa aquele desdobro, a nota volta com <span class="mono">E0312</span> — confira o código com o contador, ou numa nota que a empresa já emitiu.</span>
       </div>
       <div class="campo">
+        <label for="servico_ctribmun">Código complementar municipal (cTribMun)</label>
+        <input type="text" id="servico_ctribmun" name="servico_ctribmun" value="{{ config.servico_ctribmun }}"
+               placeholder="ex.: 001">
+        <span class="dica">É o "Código Complementar Municipal" do portal nacional. Lá aparece com 9 dígitos (ex.: <span class="mono">17.03.03.001</span>); pode colar assim que o app guarda só os 3 últimos (<span class="mono">001</span>). O Rio exige este campo — sem ele a nota volta com <span class="mono">E0312</span>.</span>
+      </div>
+      <div class="campo">
         <label for="servico_cod_municipio">Município da prestação (IBGE)</label>
         <input type="text" id="servico_cod_municipio" name="servico_cod_municipio"
                value="{{ config.servico_cod_municipio }}">

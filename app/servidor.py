@@ -150,7 +150,14 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         config.prestador_regime_apuracao_sn = numero("prestador_regime_apuracao_sn", config.prestador_regime_apuracao_sn)
         config.prestador_regime_especial = numero("prestador_regime_especial", config.prestador_regime_especial)
 
-        config.servico_ctribnac = texto("servico_ctribnac", config.servico_ctribnac)
+        # Aceita colado do portal ("17.03.03" / "17.03.03.001"): só os dígitos
+        # valem, e do complementar municipal o XML leva só os 3 últimos.
+        config.servico_ctribnac = "".join(
+            c for c in texto("servico_ctribnac", config.servico_ctribnac) if c.isdigit()
+        )
+        config.servico_ctribmun = "".join(
+            c for c in texto("servico_ctribmun", config.servico_ctribmun) if c.isdigit()
+        )[-3:]
         config.servico_cod_municipio = texto("servico_cod_municipio", config.servico_cod_municipio)
         config.servico_trib_issqn = numero("servico_trib_issqn", config.servico_trib_issqn)
         config.servico_ret_issqn = numero("servico_ret_issqn", config.servico_ret_issqn)
