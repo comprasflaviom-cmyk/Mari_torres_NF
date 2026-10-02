@@ -25,6 +25,20 @@ from pathlib import Path
 MB_ICONERROR = 0x10
 
 
+def _redirecionar_saida_padrao_ausente() -> None:
+    """Em modo janela (`console=False`), o Windows não dá console ao processo
+    — `sys.stdout`/`sys.stderr` vêm como `None`, não como um stream mudo.
+    Várias bibliotecas (o uvicorn incluso, que chama `sys.stdout.isatty()`
+    para decidir se colore o log) presumem que sempre existe um stream e
+    quebram com `AttributeError` ao tocar nisso. Troca por um sumidouro antes
+    de qualquer outra biblioteca ser importada.
+    """
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
+
+
 def _ajustar_caminhos() -> None:
     """Faz o app achar templates e estáticos dentro do pacote do PyInstaller."""
     if getattr(sys, "frozen", False):
@@ -59,6 +73,7 @@ def _registrar_erro_inicializacao() -> None:
 
 
 def main() -> int:
+    _redirecionar_saida_padrao_ausente()
     _ajustar_caminhos()
     try:
         from app.lancador import executar_com_bandeja
