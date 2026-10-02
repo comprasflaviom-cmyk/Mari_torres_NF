@@ -308,7 +308,9 @@ class Emissor:
 
         ao_progredir(EventoProgresso(
             tipo="fim_linha", situacao="AUTORIZADA", registro=registro, **contexto,
-            mensagem=f"{rotulo} | AUTORIZADA | chave {resposta.chave_acesso}",
+            # O resultado do e-mail vai na própria linha: como "detalhe", ele
+            # ficava escondido na tela e não dava para saber se o cliente recebeu.
+            mensagem=f"{rotulo} | AUTORIZADA | chave {resposta.chave_acesso} | {registro.email}",
         ))
 
     def _espelhar(self, arquivos, ao_progredir, contexto) -> None:

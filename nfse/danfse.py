@@ -739,6 +739,31 @@ def gerar_danfse(xml_nfse: bytes) -> bytes:
     return buffer.getvalue()
 
 
+def resumo_para_email(xml_nfse: bytes) -> tuple[str, dict[str, str]]:
+    """E-mail do tomador e os campos do modelo de e-mail, lidos da própria nota.
+
+    Usado para reenviar uma nota já emitida: o que vai no e-mail é o que está
+    na NFS-e, não o que o cadastro diz hoje.
+    """
+    d = ler_nfse(xml_nfse)
+    raiz = etree.fromstring(xml_nfse)
+    dps = _no(raiz if etree.QName(raiz).localname == "infNFSe" else _no(raiz, "infNFSe"), "DPS/infDPS")
+    toma = d["tomador"] or {}
+    competencia = _t(dps, "dCompet")
+    return (
+        "" if toma.get("email", "-") == "-" else toma["email"],
+        {
+            "tomador": toma.get("nome", "-"),
+            "prestador": d["prestador"]["nome"],
+            "competencia": f"{competencia[5:7]}/{competencia[:4]}" if competencia else "-",
+            "descricao": d["servico"]["descricao"],
+            "valor": d["totais"]["servico"].removeprefix("R$ "),
+            "chave": d["chave"],
+            "chave_curta": d["chave"][-8:],
+        },
+    )
+
+
 def gerar_danfse_do_arquivo(caminho_xml: Path) -> Path:
     """Gera `*_danfse.pdf` ao lado de um `*_nfse.xml` já arquivado."""
     caminho_xml = Path(caminho_xml)

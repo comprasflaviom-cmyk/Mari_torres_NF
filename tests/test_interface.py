@@ -841,3 +841,37 @@ def test_modo_manual_nao_emite_sozinho_ao_verificar(cliente):
 
     pendentes = repositorio_recorrencias().listar_pendentes()
     assert len(pendentes) == 1, "modo manual espera o clique em Emitir agora"
+
+
+def test_reenviar_email_de_nota_ja_emitida(cliente, dados_app, config, linha, monkeypatch):
+    """Nota autorizada antes de existir o PDF local: reenvia PDF + XML ao
+    e-mail que está na própria nota."""
+    from tests.conftest import CHAVE_EXEMPLO, montar_nfse_xml
+
+    pasta = dados_app / "notas" / "2026" / "10-outubro"
+    pasta.mkdir(parents=True)
+    (pasta / f"{CHAVE_EXEMPLO}_11222333000181_nfse.xml").write_bytes(montar_nfse_xml(config, linha))
+
+    conf = ac.carregar()
+    conf.email_enviar = True
+    conf.email_smtp_usuario = conf.email_remetente = "eu@empresa.com.br"
+    conf.email_permitir_homologacao = True
+    ac.salvar(conf)
+    ac.guardar_senha(ac.CHAVE_SENHA_SMTP, "senha-de-app")
+    entregues = []
+    monkeypatch.setattr("nfse.email_envio._entregar", lambda c, msg, destino: entregues.append((msg, destino)))
+
+    resposta = cliente.post(f"/historico/reenviar/{CHAVE_EXEMPLO}", headers={NOME_HEADER: TOKEN})
+
+    assert resposta.json()["ok"] is True, resposta.json()
+    mensagem, destino = entregues[0]
+    assert destino == "financeiro@clientealfa.com.br"   # o e-mail que está na nota
+    anexos = [a.get_filename() for a in mensagem.iter_attachments()]
+    assert any(a.endswith("_danfse.pdf") for a in anexos)
+    assert any(a.endswith("_nfse.xml") for a in anexos)
+
+
+def test_reenviar_email_sem_xml_avisa(cliente):
+    resposta = cliente.post("/historico/reenviar/NAOEXISTE", headers={NOME_HEADER: TOKEN})
+    assert resposta.json()["ok"] is False
+    assert "não está na pasta de notas" in resposta.json()["mensagem"]

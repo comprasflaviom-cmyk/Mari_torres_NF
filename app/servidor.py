@@ -27,7 +27,7 @@ from fastapi.templating import Jinja2Templates
 from nfse import armazenamento_config as ac
 from nfse.certificado import ErroCertificado, carregar_certificado, criar_sessao_mtls
 from nfse.config import ROTA_CONSULTA_CHAVE
-from nfse.danfse import gerar_danfse_do_arquivo
+from nfse.danfse import gerar_danfse_do_arquivo, resumo_para_email
 from nfse.estado import ControleEmissao
 from nfse.email_envio import ErroEmail, enviar_nfse
 from nfse.planilha import ErroPlanilha
@@ -521,22 +521,41 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         Cobre as notas autorizadas antes da geração local existir (a API de
         download da Sefin foi desligada em 03/08/2026) e qualquer PDF apagado.
         """
-        if not re.fullmatch(r"[A-Za-z0-9-]{1,60}", chave):
-            return HTMLResponse("Chave inválida.", status_code=400)
-        notas = _carregar_config_tolerante().para_configuracao().diretorio_notas
-        xmls = sorted(Path(notas).rglob(f"{chave}_*_nfse.xml")) if Path(notas).exists() else []
-        if not xmls:
-            return HTMLResponse(
-                f"O XML da NFS-e {chave} não está na pasta de notas ({notas}).", status_code=404
-            )
-        pdf = xmls[0].with_name(xmls[0].name.replace("_nfse.xml", "_danfse.pdf"))
-        if not pdf.exists():
-            try:
-                gerar_danfse_do_arquivo(xmls[0])
-            except Exception as exc:  # noqa: BLE001 — mensagem na tela, não traceback
-                return HTMLResponse(f"Não foi possível gerar o DANFSe: {exc}", status_code=500)
+        try:
+            _, pdf = _arquivos_da_nota(chave)
+        except ErroNotaArquivada as exc:
+            return HTMLResponse(str(exc), status_code=exc.status)
         return FileResponse(pdf, media_type="application/pdf",
                             headers={"Content-Disposition": f'inline; filename="{pdf.name}"'})
+
+    @app.post("/historico/reenviar/{chave}")
+    def reenviar_email(chave: str):
+        """Manda de novo ao tomador o PDF e o XML de uma nota já emitida.
+
+        O destinatário é o e-mail que está na própria nota; sem ele, o do
+        cadastro. Valem as mesmas travas do envio automático (redirecionamento
+        de teste, bloqueio em homologação).
+        """
+        try:
+            xml, pdf = _arquivos_da_nota(chave)
+        except ErroNotaArquivada as exc:
+            return JSONResponse({"ok": False, "mensagem": str(exc)})
+        config = _carregar_config_tolerante()
+        destino, dados = resumo_para_email(xml.read_bytes())
+        if not destino:
+            cliente = repositorio_clientes().buscar(xml.name.split("_")[1])
+            destino = cliente.email if cliente else ""
+        if not destino:
+            return JSONResponse({"ok": False, "mensagem": "Nem a nota nem o cadastro têm e-mail do cliente."})
+        try:
+            situacao = enviar_nfse(
+                config.para_configuracao_email(), config.ambiente, destino, dados,
+                {"pdf": str(pdf), "xml_nfse": str(xml)},
+            )
+        except ErroEmail as exc:
+            return JSONResponse({"ok": False, "mensagem": str(exc)})
+        enviado = situacao.startswith(("e-mail enviado", "e-mail redirecionado"))
+        return JSONResponse({"ok": enviado, "mensagem": situacao})
 
     registrar_rotas_clientes(app, pagina, _carregar_config_tolerante)
     registrar_rotas_recorrencias(app, pagina, _carregar_config_tolerante)
@@ -661,6 +680,29 @@ def _conflito_de_maquina(config: ac.ConfiguracaoApp) -> str | None:
     except (OSError, ValueError):
         return None
     return controle.conflito_de_maquina()
+
+
+class ErroNotaArquivada(Exception):
+    def __init__(self, mensagem: str, status: int):
+        super().__init__(mensagem)
+        self.status = status
+
+
+def _arquivos_da_nota(chave: str) -> tuple[Path, Path]:
+    """(XML da NFS-e, PDF) de uma nota na pasta de notas — gera o PDF se faltar."""
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,60}", chave):
+        raise ErroNotaArquivada("Chave inválida.", 400)
+    notas = Path(_carregar_config_tolerante().para_configuracao().diretorio_notas)
+    xmls = sorted(notas.rglob(f"{chave}_*_nfse.xml")) if notas.exists() else []
+    if not xmls:
+        raise ErroNotaArquivada(f"O XML da NFS-e {chave} não está na pasta de notas ({notas}).", 404)
+    pdf = xmls[0].with_name(xmls[0].name.replace("_nfse.xml", "_danfse.pdf"))
+    if not pdf.exists():
+        try:
+            gerar_danfse_do_arquivo(xmls[0])
+        except Exception as exc:  # noqa: BLE001 — mensagem na tela, não traceback
+            raise ErroNotaArquivada(f"Não foi possível gerar o DANFSe: {exc}", 500) from exc
+    return xmls[0], pdf
 
 
 def _registrar_no_historico(ambiente: str):

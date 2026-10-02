@@ -21,7 +21,7 @@
       var destino = botao.getAttribute("data-testar");
       var saida = document.getElementById(botao.getAttribute("data-saida"));
       botao.disabled = true;
-      saida.textContent = "Testando...";
+      saida.textContent = botao.getAttribute("data-aguarde") || "Testando...";
       saida.className = "discreto";
 
       /* O teste do certificado usa o que está no formulário agora, mesmo sem

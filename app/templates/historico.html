@@ -47,6 +47,11 @@
           {% if nota.chave_acesso %}
             <a class="botao botao-pequeno" href="/danfse/{{ nota.chave_acesso }}" target="_blank"
                title="Abre o PDF; se ainda não existir, gera a partir do XML">PDF</a>
+            <button class="botao botao-pequeno" type="button"
+                    data-testar="/historico/reenviar/{{ nota.chave_acesso }}"
+                    data-saida="reenvio-{{ loop.index }}" data-aguarde="Enviando..."
+                    title="Manda o PDF e o XML para o e-mail do cliente">Reenviar e-mail</button>
+            <span id="reenvio-{{ loop.index }}" class="discreto"></span>
           {% endif %}
           <span class="discreto mono" style="word-break:break-all">{{ nota.pasta }}</span>
         </td>
