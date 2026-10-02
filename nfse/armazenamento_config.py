@@ -283,6 +283,14 @@ class ConfiguracaoApp:
             faltando.append(
                 f"Código de tributação nacional deve ter 6 dígitos, sem pontos: {self.servico_ctribnac!r}."
             )
+        # Faixas da Sefin por tipo de emissor: 70000-79999 é do emissor web (o
+        # portal), e aplicativo próprio via API só pode usar 1-49999 — fora
+        # disso, toda nota volta com E0010.
+        if not (self.serie_dps.isdigit() and 1 <= int(self.serie_dps) <= 49999):
+            faltando.append(
+                f"Série da DPS {self.serie_dps!r} fora da faixa permitida para este app "
+                "(1 a 49999). A 70000 é do emissor web do portal — use outra, ex.: 1."
+            )
         if self.servico_ctribmun and not (self.servico_ctribmun.isdigit() and len(self.servico_ctribmun) == 3):
             faltando.append(
                 f"Código complementar municipal deve ter 3 dígitos: {self.servico_ctribmun!r}."

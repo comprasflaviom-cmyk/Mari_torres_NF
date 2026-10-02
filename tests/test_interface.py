@@ -628,6 +628,16 @@ def test_codigos_de_tributacao_colados_do_portal_sao_normalizados(cliente):
     assert config.pendencias() == []
 
 
+def test_serie_do_emissor_web_vira_pendencia(dados_app):
+    """Rejeição real E0010: série 70000 é a faixa do emissor web do portal;
+    aplicativo próprio só pode usar 1-49999."""
+    config = ac.carregar()
+    config.serie_dps = "70000"
+    assert any("fora da faixa" in p for p in config.pendencias())
+    config.serie_dps = "1"
+    assert config.pendencias() == []
+
+
 def test_configuracao_sem_novo_certificado_mantem_o_atual(cliente):
     anterior = ac.carregar().caminho_certificado_pfx
     cliente.post(
