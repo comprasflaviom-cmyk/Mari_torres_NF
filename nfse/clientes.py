@@ -81,6 +81,21 @@ CREATE TABLE IF NOT EXISTS recorrencias (
     UNIQUE(documento, competencia)
 );
 
+-- Recibos de serviço: não vão à Receita. O número é sequencial e nunca se
+-- repete (AUTOINCREMENT não reaproveita número de recibo apagado).
+CREATE TABLE IF NOT EXISTS recibos (
+    numero      INTEGER PRIMARY KEY AUTOINCREMENT,
+    documento   TEXT NOT NULL,
+    tomador     TEXT NOT NULL,
+    email       TEXT DEFAULT '',
+    valor       TEXT NOT NULL,
+    descricao   TEXT NOT NULL,
+    data        TEXT NOT NULL,
+    arquivo     TEXT DEFAULT '',
+    enviado_em  TEXT DEFAULT '',
+    criado_em   TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_emissoes_documento    ON emissoes(documento);
 CREATE INDEX IF NOT EXISTS idx_clientes_ativo        ON clientes(ativo);
 CREATE INDEX IF NOT EXISTS idx_recorrencias_estado   ON recorrencias(estado);
@@ -319,6 +334,45 @@ def _linha_para_cliente(linha: sqlite3.Row) -> Cliente:
 # ---------------------------------------------------------------------------
 # Histórico (modelo de leitura)
 # ---------------------------------------------------------------------------
+class RepositorioRecibos:
+    def __init__(self, banco: BancoLocal):
+        self.banco = banco
+
+    def criar(self, documento: str, tomador: str, email: str, valor: str,
+              descricao: str, data: str) -> int:
+        """Reserva o próximo número. O PDF é gravado depois, com `definir_arquivo`."""
+        with self.banco._conectar() as conexao:
+            cursor = conexao.execute(
+                """INSERT INTO recibos (documento, tomador, email, valor, descricao, data, criado_em)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (documento, tomador, email, valor, descricao, data,
+                 datetime.now().isoformat(timespec="seconds")),
+            )
+            return int(cursor.lastrowid)
+
+    def definir_arquivo(self, numero: int, arquivo: str) -> None:
+        with self.banco._conectar() as conexao:
+            conexao.execute("UPDATE recibos SET arquivo = ? WHERE numero = ?", (arquivo, numero))
+
+    def marcar_enviado(self, numero: int, destino: str) -> None:
+        with self.banco._conectar() as conexao:
+            conexao.execute(
+                "UPDATE recibos SET enviado_em = ?, email = ? WHERE numero = ?",
+                (datetime.now().isoformat(timespec="seconds"), destino, numero),
+            )
+
+    def buscar(self, numero: int) -> dict | None:
+        with self.banco._conectar() as conexao:
+            linha = conexao.execute("SELECT * FROM recibos WHERE numero = ?", (numero,)).fetchone()
+        return dict(linha) if linha else None
+
+    def listar(self, limite: int = 100) -> list[dict]:
+        with self.banco._conectar() as conexao:
+            return [dict(l) for l in conexao.execute(
+                "SELECT * FROM recibos ORDER BY numero DESC LIMIT ?", (limite,)
+            )]
+
+
 class RepositorioEmissoes:
     def __init__(self, banco: BancoLocal):
         self.banco = banco

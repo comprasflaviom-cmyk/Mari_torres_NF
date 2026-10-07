@@ -90,7 +90,7 @@ h2 { font-size: 17px; margin: 26px 0 12px; }
 .campo label { font-size: 13px; font-weight: 600; }
 .campo .dica { font-size: 12px; color: var(--tinta-suave); }
 input[type=text], input[type=number], input[type=email], input[type=password],
-input[type=month], input[type=file], select, textarea {
+input[type=month], input[type=date], input[type=file], select, textarea {
   padding: 9px 11px; border: 1px solid var(--borda); border-radius: 7px;
   font: inherit; background: var(--papel); color: var(--tinta); width: 100%;
 }

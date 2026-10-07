@@ -168,6 +168,9 @@
     });
   });
 
+  /* ---- Tela de recibos ---- */
+  if (document.getElementById("btn-gerar-recibo")) { montarRecibos(); return; }
+
   /* ---- Tela de nota avulsa ---- */
   var btnSimularAvulsa = document.getElementById("btn-simular-avulsa");
   if (btnSimularAvulsa) { montarAvulsa(); return; }
@@ -363,6 +366,132 @@
     acompanhar();
   }
 
+  /* Máscara de moeda: digita só números, o R$ se forma da direita para a
+     esquerda (como numa maquininha de cartão) — ninguém precisa pensar em
+     onde vai o ponto ou a vírgula. */
+  function mascaraMoeda(campo) {
+    campo.addEventListener("input", function () {
+      var digitos = campo.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+      if (!digitos) { campo.value = ""; return; }
+      var centavos = digitos.slice(-2).padStart(2, "0");
+      var inteiro = (digitos.slice(0, -2) || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+      campo.value = inteiro + "," + centavos;
+    });
+  }
+
+  /* Bloco do tomador (templates/_tomador.html): cliente do cadastro ou
+     digitado na hora. `documento` é como a tela chama o que vai ao cliente
+     ("A nota", "O recibo"). */
+  function montarTomador(documento) {
+    var seletor = document.getElementById("tomador_documento");
+    var tipoNovo = document.getElementById("tipo-novo");
+    var tipoCadastro = document.getElementById("tipo-cadastro");
+    var CAMPOS_NOVO = ["documento", "razao_social", "email", "telefone", "logradouro", "numero",
+      "complemento", "bairro", "cod_municipio", "uf", "cep"];
+
+    function novo() { return tipoNovo && tipoNovo.checked; }
+
+    function mostrar() {
+      document.getElementById("bloco-cadastro").hidden = novo();
+      document.getElementById("bloco-novo").hidden = !novo();
+    }
+    [tipoNovo, tipoCadastro].forEach(function (r) { if (r) r.addEventListener("change", mostrar); });
+
+    /* Avisa quando o cliente escolhido está marcado para não receber e-mail. */
+    seletor.addEventListener("change", function () {
+      var opcao = seletor.selectedOptions[0];
+      var dica = document.getElementById("dica-cliente");
+      if (!opcao || !opcao.value) { dica.textContent = "Só clientes ativos aparecem aqui."; return; }
+      dica.textContent = opcao.getAttribute("data-recebe") === "1"
+        ? documento + " será enviado(a) para " + opcao.getAttribute("data-email") + "."
+        : "Este cliente está marcado para NÃO receber por e-mail.";
+    });
+
+    return {
+      novo: novo,
+      email: function () {
+        if (novo()) return document.getElementById("novo_email").value.trim();
+        var opcao = seletor.selectedOptions[0];
+        return opcao && opcao.value ? opcao.getAttribute("data-email") : "";
+      },
+      nome: function () {
+        if (novo()) {
+          return document.getElementById("novo_razao_social").value + " — " +
+            document.getElementById("novo_documento").value;
+        }
+        var opcao = seletor.selectedOptions[0];
+        return opcao && opcao.value ? opcao.textContent.trim() : "—";
+      },
+      anexar: function (dados) {
+        dados.append("tipo_tomador", novo() ? "novo" : "cadastro");
+        dados.append("documento", seletor.value);
+        CAMPOS_NOVO.forEach(function (nome) {
+          dados.append("novo_" + nome, document.getElementById("novo_" + nome).value);
+        });
+        dados.append("novo_salvar", document.getElementById("novo_salvar").checked ? "1" : "");
+      }
+    };
+  }
+
+  /* ---- Tela de recibos: gera o PDF, a pessoa confere e só então envia ---- */
+  function montarRecibos() {
+    var tomador = montarTomador("O recibo");
+    var botao = document.getElementById("btn-gerar-recibo");
+    var situacao = document.getElementById("situacao-recibo");
+    var resultado = document.getElementById("resultado-recibo");
+    var btnEnviar = document.getElementById("resultado-enviar");
+    var saidaEnvio = document.getElementById("resultado-envio");
+    var numeroAtual = null;
+    mascaraMoeda(document.getElementById("valor"));
+
+    botao.addEventListener("click", function () {
+      var dados = new FormData();
+      tomador.anexar(dados);
+      dados.append("data", document.getElementById("data_recibo").value);
+      dados.append("valor", document.getElementById("valor").value);
+      dados.append("descricao", document.getElementById("descricao").value);
+
+      botao.disabled = true;
+      situacao.textContent = "Gerando...";
+      resultado.hidden = true;
+      enviar("/recibos/gerar", dados)
+        .then(function (r) {
+          if (!r.dados.ok) { situacao.textContent = r.dados.mensagem || MSG_ERRO; return; }
+          situacao.textContent = "";
+          numeroAtual = r.dados.numero;
+          document.getElementById("resultado-titulo").textContent =
+            r.dados.mensagem + " Confira o PDF antes de enviar.";
+          document.getElementById("resultado-pdf").href = r.dados.pdf;
+          btnEnviar.hidden = !r.dados.email;
+          btnEnviar.textContent = "Enviar por e-mail para " + r.dados.email;
+          btnEnviar.disabled = false;
+          saidaEnvio.textContent = r.dados.email ? "" : "Sem e-mail do cliente: abra o PDF e envie você mesmo.";
+          saidaEnvio.className = "discreto";
+          resultado.hidden = false;
+        })
+        .catch(function () { situacao.textContent = MSG_SEM_CONEXAO; })
+        .finally(function () { botao.disabled = false; });
+    });
+
+    btnEnviar.addEventListener("click", function () {
+      if (!numeroAtual) return;
+      btnEnviar.disabled = true;
+      saidaEnvio.textContent = "Enviando...";
+      saidaEnvio.className = "discreto";
+      enviar("/recibos/" + numeroAtual + "/enviar", new FormData())
+        .then(function (r) {
+          saidaEnvio.textContent = r.dados.mensagem || (r.dados.ok ? "Enviado." : MSG_ERRO);
+          saidaEnvio.className = r.dados.ok ? "etiqueta etiqueta-ok" : "etiqueta etiqueta-erro";
+          if (!r.dados.ok) btnEnviar.disabled = false;
+        })
+        .catch(function () {
+          saidaEnvio.textContent = MSG_SEM_CONEXAO;
+          saidaEnvio.className = "etiqueta etiqueta-erro";
+          btnEnviar.disabled = false;
+        });
+    });
+  }
+
   function montarAvulsa() {
     var cfg = window.EMISSOR_CONFIG || {};
     var consoleEl = document.getElementById("console");
@@ -372,46 +501,9 @@
     var cortina = document.getElementById("cortina");
     var confirmacao = document.getElementById("confirmacao");
     var btnConfirmar = document.getElementById("btn-confirmar");
-    var seletor = document.getElementById("documento");
-    var campoValor = document.getElementById("valor");
-    var tipoNovo = document.getElementById("tipo-novo");
-    var tipoCadastro = document.getElementById("tipo-cadastro");
+    var tomador = montarTomador("A nota");
     var fonte = null;
-    var CAMPOS_NOVO = ["documento", "razao_social", "email", "telefone", "logradouro", "numero",
-      "complemento", "bairro", "cod_municipio", "uf", "cep"];
-
-    function tomadorNovo() { return tipoNovo && tipoNovo.checked; }
-
-    /* Alterna entre escolher do cadastro e digitar um tomador na hora. */
-    function mostrarTomador() {
-      document.getElementById("bloco-cadastro").hidden = tomadorNovo();
-      document.getElementById("bloco-novo").hidden = !tomadorNovo();
-    }
-    [tipoNovo, tipoCadastro].forEach(function (r) {
-      if (r) r.addEventListener("change", mostrarTomador);
-    });
-
-    /* Máscara de moeda: digita só números, o R$ se forma da direita para a
-       esquerda (como numa maquininha de cartão) — ninguém precisa pensar em
-       onde vai o ponto ou a vírgula. */
-    campoValor.addEventListener("input", function () {
-      var digitos = campoValor.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
-      if (!digitos) { campoValor.value = ""; return; }
-      var centavos = digitos.slice(-2).padStart(2, "0");
-      var inteiro = (digitos.slice(0, -2) || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-      campoValor.value = inteiro + "," + centavos;
-    });
-
-    /* Avisa quando o cliente escolhido está marcado para não receber e-mail:
-       a nota sai normalmente, mas ninguém recebe nada. */
-    seletor.addEventListener("change", function () {
-      var opcao = seletor.selectedOptions[0];
-      var dica = document.getElementById("dica-cliente");
-      if (!opcao || !opcao.value) { dica.textContent = "Só clientes ativos aparecem aqui."; return; }
-      dica.textContent = opcao.getAttribute("data-recebe") === "1"
-        ? "A nota será enviada para " + opcao.getAttribute("data-email") + "."
-        : "Este cliente está marcado para NÃO receber por e-mail. A nota será emitida e arquivada, sem envio.";
-    });
+    mascaraMoeda(document.getElementById("valor"));
 
     function escrever(texto, classe) {
       var linha = document.createElement("div");
@@ -465,12 +557,7 @@
 
     function disparar(modo, textoConfirmacao) {
       var dados = new FormData();
-      dados.append("tipo_tomador", tomadorNovo() ? "novo" : "cadastro");
-      dados.append("documento", seletor.value);
-      CAMPOS_NOVO.forEach(function (nome) {
-        dados.append("novo_" + nome, document.getElementById("novo_" + nome).value);
-      });
-      dados.append("novo_salvar", document.getElementById("novo_salvar").checked ? "1" : "");
+      tomador.anexar(dados);
       dados.append("servico_ctribnac", document.getElementById("servico_ctribnac").value);
       dados.append("servico_ctribmun", document.getElementById("servico_ctribmun").value);
       dados.append("competencia", document.getElementById("competencia").value);
@@ -501,11 +588,7 @@
 
     document.getElementById("btn-emitir-avulsa").addEventListener("click", function () {
       if (!cfg.producao) { disparar("emitir"); return; }
-      var opcao = seletor.selectedOptions[0];
-      var nome = tomadorNovo()
-        ? (document.getElementById("novo_razao_social").value + " — " +
-           document.getElementById("novo_documento").value)
-        : (opcao && opcao.value ? opcao.textContent : "—");
+      var nome = tomador.nome();
       document.getElementById("modal-cliente").textContent = nome;
       document.getElementById("modal-valor").textContent =
         "R$ " + (document.getElementById("valor").value || "0,00");

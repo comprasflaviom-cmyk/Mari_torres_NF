@@ -147,6 +147,40 @@ def enviar_nfse(
     return f"e-mail enviado para {destino_real}"
 
 
+def enviar_documento(
+    config_email: ConfiguracaoEmail,
+    destinatario: str,
+    assunto: str,
+    corpo: str,
+    anexo: Path,
+) -> str:
+    """Envia um documento avulso (ex.: recibo) com um PDF anexo.
+
+    Não depende do ambiente nem da chave "enviar automaticamente": quem chama
+    é um clique explícito. O redirecionamento de teste e a cópia oculta valem.
+    """
+    if not destinatario:
+        raise ErroEmail("Este cliente não tem e-mail cadastrado.")
+    config_email.validar()
+    destino_real = config_email.destino_teste or destinatario
+
+    mensagem = EmailMessage()
+    mensagem["From"] = formataddr((config_email.remetente_nome or None, config_email.remetente_email))
+    mensagem["To"] = destino_real
+    if config_email.copia_oculta:
+        mensagem["Bcc"] = ", ".join(config_email.copia_oculta)
+    mensagem["Subject"] = assunto
+    mensagem["Message-ID"] = make_msgid()
+    mensagem.set_content(corpo)
+    mensagem.add_attachment(anexo.read_bytes(), maintype="application", subtype="pdf",
+                            filename=anexo.name)
+    _entregar(config_email, mensagem, destino_real)
+
+    if config_email.destino_teste:
+        return f"e-mail redirecionado para {destino_real} (redirecionamento de teste ligado)"
+    return f"e-mail enviado para {destino_real}"
+
+
 def _montar_mensagem(
     config_email: ConfiguracaoEmail,
     destinatario: str,

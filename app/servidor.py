@@ -39,6 +39,7 @@ from nfse.estado import nome_da_maquina
 from nfse.servico import OpcoesEmissao, montar_emissor
 
 from .recorrencias import registrar as registrar_rotas_recorrencias, repositorio_recorrencias
+from .rotas_recibos import registrar as registrar_rotas_recibos
 from .rotas_clientes import registrar as registrar_rotas_clientes, repositorio_clientes, repositorio_emissoes
 from .ajuda import AJUDA
 from .seguranca import NOME_HEADER, Guardiao, gravar_cookie, montar_middleware
@@ -191,6 +192,9 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         config.prestador_simples_nacional = numero("prestador_simples_nacional", config.prestador_simples_nacional)
         config.prestador_regime_apuracao_sn = numero("prestador_regime_apuracao_sn", config.prestador_regime_apuracao_sn)
         config.prestador_regime_especial = numero("prestador_regime_especial", config.prestador_regime_especial)
+        config.prestador_razao_social = texto("prestador_razao_social", config.prestador_razao_social)
+        config.prestador_endereco = texto("prestador_endereco", config.prestador_endereco)
+        config.recibo_assinante = texto("recibo_assinante", config.recibo_assinante)
 
         # Aceita colado do portal ("17.03.03" / "17.03.03.001"): só os dígitos
         # valem, e do complementar municipal o XML leva só os 3 últimos.
@@ -599,6 +603,7 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
 
     registrar_rotas_clientes(app, pagina, _carregar_config_tolerante)
     registrar_rotas_recorrencias(app, pagina, _carregar_config_tolerante)
+    registrar_rotas_recibos(app, pagina, _carregar_config_tolerante)
     return app
 
 

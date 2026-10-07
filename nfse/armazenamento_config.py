@@ -157,6 +157,10 @@ class ConfiguracaoApp:
     prestador_simples_nacional: int = 3
     prestador_regime_apuracao_sn: int = 1
     prestador_regime_especial: int = 0
+    # Só para o recibo (a nota fiscal pega nome e endereço do cadastro na Receita).
+    prestador_razao_social: str = ""
+    prestador_endereco: str = ""
+    recibo_assinante: str = ""
 
     # Serviço
     servico_ctribnac: str = "170101"               # LC 116, 17.01 — consultoria

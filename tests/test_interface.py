@@ -1058,3 +1058,73 @@ def test_nota_avulsa_autorizada_entra_no_historico(cliente, monkeypatch):
 
     assert "CHAVE-AVULSA1" in [n["chave_acesso"] if isinstance(n, dict) else n.chave_acesso
                               for n in repositorio_emissoes().listar()]
+
+
+# ---------------------------------------------------------------------------
+# Recibos (não vão à Receita)
+# ---------------------------------------------------------------------------
+def _recibo(cliente, **campos):
+    dados = {**NOVO_TOMADOR, "novo_email": "cliente@alfa.com.br", "data": "2026-10-07",
+             "valor": "4.500,00", "descricao": "consultoria prestada em setembro"}
+    dados.update(campos)
+    return cliente.post("/recibos/gerar", headers={NOME_HEADER: TOKEN}, data=dados)
+
+
+def _com_nome_da_empresa():
+    config = ac.carregar()
+    config.prestador_razao_social = "Empresa Teste LTDA"
+    ac.salvar(config)
+
+
+def test_tela_recibos_abre(cliente):
+    html = cliente.get("/recibos").text
+    assert "Não vai para a Receita" in html
+    assert 'id="novo_documento"' in html
+
+
+def test_recibo_exige_nome_da_empresa(cliente):
+    resposta = _recibo(cliente)
+    assert resposta.status_code == 400
+    assert "nome da empresa" in resposta.json()["mensagem"]
+
+
+def test_recibo_gera_pdf_com_numeracao_propria(cliente, dados_app):
+    _com_nome_da_empresa()
+    primeiro = _recibo(cliente).json()
+    segundo = _recibo(cliente).json()
+    assert (primeiro["ok"], primeiro["numero"]) == (True, 1)
+    assert segundo["numero"] == 2
+
+    pdf = cliente.get(primeiro["pdf"])
+    assert pdf.status_code == 200
+    assert pdf.headers["content-type"] == "application/pdf"
+    assert pdf.content[:4] == b"%PDF"
+    assert list((dados_app / "notas" / "recibos" / "2026").glob("Recibo_0001_*.pdf"))
+
+
+def test_recibo_enviar_sem_email_configurado_explica(cliente):
+    _com_nome_da_empresa()
+    numero = _recibo(cliente).json()["numero"]
+    resposta = cliente.post(f"/recibos/{numero}/enviar", headers={NOME_HEADER: TOKEN})
+    assert resposta.status_code == 400
+    assert "Configuração" in resposta.json()["mensagem"]
+
+
+def test_recibo_enviar_por_email(cliente, monkeypatch):
+    _com_nome_da_empresa()
+    numero = _recibo(cliente).json()["numero"]
+    enviados = []
+    monkeypatch.setattr(
+        "app.rotas_recibos.enviar_documento",
+        lambda cfg, destino, assunto, corpo, anexo: enviados.append((destino, anexo)) or
+        f"e-mail enviado para {destino}",
+    )
+    monkeypatch.setattr(
+        ac.ConfiguracaoApp, "para_configuracao_email",
+        lambda self, senha_smtp=None: type("C", (), {
+            "servidor": "smtp", "usuario": "u", "senha": "s", "remetente_email": "r@x"})(),
+    )
+    resposta = cliente.post(f"/recibos/{numero}/enviar", headers={NOME_HEADER: TOKEN})
+    assert resposta.json()["ok"] is True
+    assert enviados[0][0] == "cliente@alfa.com.br"
+    assert "enviado em" in cliente.get("/recibos").text

@@ -177,7 +177,7 @@ AJUDA: dict[str, str] = {
     "historico:busca": "Digite parte do nome do cliente, do CNPJ ou da chave de acesso da nota.",
     "apenas_ativos": "Mostra só os clientes ativos.",
     # ---------------- Nota avulsa ----------------
-    "avulsa:documento": "Escolha um cliente já cadastrado. Para alguém novo, marque \"Outro tomador\" acima.",
+    "tomador_documento": "Escolha um cliente já cadastrado. Para alguém novo, marque \"Outro tomador\" acima.",
     "avulsa:competencia": "Mês em que o serviço foi prestado. Ex.: trabalho feito em setembro → 09/2026.",
     "avulsa:servico_ctribnac": (
         "Já vem o código da Configuração. Troque só se esta nota for de outro tipo de serviço — "
@@ -191,7 +191,7 @@ AJUDA: dict[str, str] = {
     "descricao": "O texto que o cliente vai ler na nota, descrevendo o serviço feito.",
     "novo_documento": "CNPJ ou CPF de quem recebe a nota. Pode digitar com ou sem pontos.",
     "novo_razao_social": "Nome da empresa como está no CNPJ, ou nome completo da pessoa.",
-    "novo_email": "Se preencher, a nota é enviada para este e-mail. Em branco, só fica arquivada.",
+    "novo_email": "Se preencher, a nota ou o recibo pode ser enviado para este e-mail. Em branco, só fica arquivado.",
     "novo_telefone": "Opcional.",
     "novo_logradouro": "Opcional. Se preencher o endereço, informe também número, bairro, cidade e CEP.",
     "novo_numero": "Número do endereço. Sem número, use S/N.",
@@ -201,7 +201,22 @@ AJUDA: dict[str, str] = {
     "novo_uf": "Sigla do estado, ex.: RJ.",
     "novo_cep": "CEP do endereço.",
     "novo_salvar": (
-        "Guarda este tomador em Clientes depois de emitir, para não precisar digitar de novo. "
+        "Guarda este tomador em Clientes, para não precisar digitar de novo. "
         "Se ele já estiver cadastrado, o cadastro existente não é alterado."
+    ),
+    # ---------------- Recibos ----------------
+    "prestador_razao_social": (
+        "Nome da sua empresa como está no CNPJ. Aparece no recibo; a nota fiscal "
+        "usa o nome do cadastro da Receita."
+    ),
+    "prestador_endereco": "Endereço da sua empresa, numa linha só. Aparece embaixo da assinatura do recibo.",
+    "recibo_assinante": (
+        "Nome da pessoa que assina os recibos (ex.: a sócia). Em branco, o recibo sai "
+        "assinado com o nome da empresa."
+    ),
+    "data_recibo": "Data em que o pagamento foi recebido. Vai no fim do recibo: \"Rio de Janeiro, 7 de outubro de 2026\".",
+    "recibos:valor": "Valor recebido. Digite só os números: 450000 vira 4.500,00. O recibo escreve o valor também por extenso.",
+    "recibos:descricao": (
+        "Complete a frase \"…referente a ____\". Ex.: consultoria estratégica prestada em setembro de 2026."
     ),
 }

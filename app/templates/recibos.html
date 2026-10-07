@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% set pagina_atual = 'recibos' %}
+{% block conteudo %}
+<h1>Recibos</h1>
+<p class="subtitulo">
+  Recibo de prestação de serviço em PDF, para mandar ao cliente.
+  <strong>Não vai para a Receita e não é nota fiscal.</strong>
+</p>
+
+{% if faltando %}
+  <div class="aviso aviso-atencao">
+    Para o recibo sair com os dados da sua empresa, preencha em
+    <a href="/configuracao">Configuração → Prestador</a>: {{ faltando | join(' e ') }}.
+  </div>
+{% endif %}
+
+{% include "_tomador.html" %}
+
+<div class="cartao">
+  <h2 style="margin-top:0">Recibo</h2>
+  <div class="grade">
+    <div class="campo">
+      <label for="data_recibo">Data do recibo</label>
+      <input type="date" id="data_recibo" value="{{ hoje }}">
+    </div>
+    <div class="campo">
+      <label for="valor">Valor recebido (R$)</label>
+      <input type="text" id="valor" inputmode="numeric" placeholder="4.500,00" autocomplete="off">
+    </div>
+  </div>
+  <div class="campo" style="margin-top:16px">
+    <label for="descricao">Referente a</label>
+    <textarea id="descricao" placeholder="consultoria estratégica prestada em setembro de 2026"></textarea>
+    <span class="dica">Complete a frase: "…a importância de R$ X, referente a ____".</span>
+  </div>
+
+  <div class="acoes">
+    <button class="botao botao-principal" id="btn-gerar-recibo">Gerar recibo (PDF)</button>
+    <span class="discreto" id="situacao-recibo"></span>
+  </div>
+
+  <div class="aviso aviso-ok" id="resultado-recibo" style="margin:16px 0 0" hidden>
+    <strong id="resultado-titulo"></strong>
+    <div class="acoes" style="margin-top:10px">
+      <a class="botao botao-principal botao-pequeno" id="resultado-pdf" target="_blank">Abrir PDF (conferir / imprimir)</a>
+      <button class="botao botao-pequeno" type="button" id="resultado-enviar" data-aguarde="Enviando...">
+        Enviar por e-mail
+      </button>
+      <span id="resultado-envio" class="discreto"></span>
+    </div>
+  </div>
+</div>
+
+<h2>Últimos recibos</h2>
+{% if recibos %}
+<div class="rolagem">
+  <table>
+    <thead>
+      <tr><th>Nº</th><th>Data</th><th>Cliente</th><th class="numerico">Valor</th><th>E-mail</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in recibos %}
+      <tr>
+        <td class="mono">{{ '%04d' % r.numero }}</td>
+        <td class="discreto">{{ r.data[8:10] }}/{{ r.data[5:7] }}/{{ r.data[:4] }}</td>
+        <td>{{ r.tomador }}</td>
+        <td class="numerico">{{ r.valor | moeda }}</td>
+        <td class="discreto">
+          {% if r.enviado_em %}enviado em {{ r.enviado_em[8:10] }}/{{ r.enviado_em[5:7] }}{% else %}não enviado{% endif %}
+        </td>
+        <td>
+          <a class="botao botao-pequeno" href="/recibos/{{ r.numero }}/pdf" target="_blank">PDF</a>
+          {% if r.email %}
+          <button class="botao botao-pequeno" type="button" data-testar="/recibos/{{ r.numero }}/enviar"
+                  data-saida="envio-{{ r.numero }}" data-aguarde="Enviando..."
+                  title="Manda o PDF para {{ r.email }}">Enviar e-mail</button>
+          {% endif %}
+          <span id="envio-{{ r.numero }}" class="discreto"></span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="cartao vazio"><p>Nenhum recibo gerado ainda.</p></div>
+{% endif %}
+{% endblock %}

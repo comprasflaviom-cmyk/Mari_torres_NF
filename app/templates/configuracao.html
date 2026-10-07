@@ -95,6 +95,12 @@
     <h2 style="margin-top:0">Prestador (sua empresa)</h2>
     <div class="grade">
       <div class="campo">
+        <label for="prestador_razao_social">Nome da empresa (razão social)</label>
+        <input type="text" id="prestador_razao_social" name="prestador_razao_social"
+               value="{{ config.prestador_razao_social }}">
+        <span class="dica">Usado nos recibos. A nota fiscal pega o nome do cadastro na Receita.</span>
+      </div>
+      <div class="campo">
         <label for="prestador_cnpj">CNPJ</label>
         <input type="text" id="prestador_cnpj" name="prestador_cnpj" value="{{ config.prestador_cnpj }}"
                inputmode="numeric" placeholder="somente números">
@@ -109,6 +115,16 @@
         <input type="text" id="prestador_cod_municipio" name="prestador_cod_municipio"
                value="{{ config.prestador_cod_municipio }}">
         <span class="dica">3304557 = Rio de Janeiro/RJ.</span>
+      </div>
+      <div class="campo">
+        <label for="prestador_endereco">Endereço (para recibos)</label>
+        <input type="text" id="prestador_endereco" name="prestador_endereco"
+               value="{{ config.prestador_endereco }}" placeholder="Rua, número - bairro - cidade/UF - CEP">
+      </div>
+      <div class="campo">
+        <label for="recibo_assinante">Quem assina os recibos</label>
+        <input type="text" id="recibo_assinante" name="recibo_assinante"
+               value="{{ config.recibo_assinante }}" placeholder="em branco = nome da empresa">
       </div>
       <div class="campo">
         <label for="prestador_simples_nacional">Regime do Simples Nacional</label>
