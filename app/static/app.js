@@ -12,8 +12,78 @@
       method: "POST",
       headers: { "X-Emissor-Token": window.EMISSOR_TOKEN },
       body: corpo
-    }).then(function (r) { return r.json().then(function (j) { return { http: r.status, dados: j }; }); });
+    }).then(function (r) {
+      return r.json().then(
+        function (j) { return { http: r.status, dados: j }; },
+        /* Resposta que não é JSON: nunca mostrar "SyntaxError" para quem usa. */
+        function () { return { http: r.status, dados: { ok: false, mensagem: MSG_ERRO } }; }
+      );
+    });
   }
+
+  /* Mensagens para quem usa — o detalhe técnico vai para o erros.log. */
+  var MSG_ERRO = "Algo não saiu como esperado. Tente de novo; se continuar, " +
+    "envie ao suporte o arquivo erros.log da pasta do aplicativo.";
+  var MSG_SEM_CONEXAO = "Não foi possível falar com o aplicativo. Confira se ele " +
+    "está aberto (ícone perto do relógio) e tente de novo.";
+
+  /* ---- Ajuda "?" ao lado dos campos ----
+     Os textos vêm de app/ajuda.py. Todo <label for="id"> com texto lá ganha um
+     "?" que abre um balão; clicar fora ou Esc fecha. */
+  (function montarAjuda() {
+    var textos = window.EMISSOR_AJUDA || {};
+    var tela = document.body.getAttribute("data-pagina") || "";
+    var balao = null, aberto = null;
+
+    function fechar() {
+      if (balao) { balao.remove(); balao = null; }
+      if (aberto) { aberto.setAttribute("aria-expanded", "false"); aberto = null; }
+    }
+
+    function abrir(botao, texto) {
+      fechar();
+      balao = document.createElement("div");
+      balao.className = "balao-ajuda";
+      balao.setAttribute("role", "tooltip");
+      balao.textContent = texto;
+      document.body.appendChild(balao);
+      var r = botao.getBoundingClientRect();
+      var esquerda = Math.min(r.left + window.scrollX,
+        window.scrollX + document.documentElement.clientWidth - balao.offsetWidth - 12);
+      balao.style.left = Math.max(8, esquerda) + "px";
+      balao.style.top = (r.bottom + window.scrollY + 6) + "px";
+      botao.setAttribute("aria-expanded", "true");
+      aberto = botao;
+    }
+
+    document.querySelectorAll("label[for]").forEach(function (rotulo) {
+      var id = rotulo.getAttribute("for");
+      var texto = textos[tela + ":" + id] || textos[id];
+      if (!texto) return;
+      var botao = document.createElement("button");
+      botao.type = "button";
+      botao.className = "ajuda";
+      botao.textContent = "?";
+      botao.title = "O que é isto?";
+      botao.setAttribute("aria-label", "Ajuda: o que é isto?");
+      botao.setAttribute("aria-expanded", "false");
+      /* O botão fica dentro do <label>: sem o preventDefault, clicar no "?"
+         marcaria/desmarcaria a caixa do campo. */
+      botao.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (aberto === botao) fechar(); else abrir(botao, texto);
+      });
+      var dica = rotulo.querySelector(".dica");
+      if (dica) rotulo.insertBefore(botao, dica); else rotulo.appendChild(botao);
+    });
+
+    document.addEventListener("click", function (e) {
+      if (balao && !balao.contains(e.target)) fechar();
+    });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") fechar(); });
+    window.addEventListener("resize", fechar);
+  })();
 
   /* ---- Botões de teste da tela de configuração ---- */
   document.querySelectorAll("[data-testar]").forEach(function (botao) {
@@ -45,7 +115,7 @@
           saida.className = r.dados.ok ? "etiqueta etiqueta-ok" : "etiqueta etiqueta-erro";
         })
         .catch(function (erro) {
-          saida.textContent = "Falha na comunicação: " + erro;
+          saida.textContent = MSG_SEM_CONEXAO;
           saida.className = "etiqueta etiqueta-erro";
         })
         .finally(function () { botao.disabled = false; });
@@ -64,7 +134,7 @@
           saida.className = r.dados.ok ? "etiqueta etiqueta-ok" : "etiqueta etiqueta-erro";
           if (r.dados.ok) setTimeout(function () { location.reload(); }, 1200);
         })
-        .catch(function (erro) { saida.textContent = "Falha: " + erro; })
+        .catch(function () { saida.textContent = MSG_SEM_CONEXAO; })
         .finally(function () { botao.disabled = false; });
     });
   });
@@ -93,7 +163,7 @@
             botao.textContent = novoValor === "1" ? "Sim" : "Não";
           }
         })
-        .catch(function (erro) { alert("Falha na comunicação: " + erro); })
+        .catch(function () { alert(MSG_SEM_CONEXAO); })
         .finally(function () { botao.disabled = false; });
     });
   });
@@ -250,7 +320,7 @@
         acompanhar();
       })
       .catch(function (erro) {
-        situacao.textContent = "Falha na comunicação: " + erro;
+        situacao.textContent = MSG_SEM_CONEXAO;
         habilitar(true);
       });
   }
@@ -304,7 +374,22 @@
     var btnConfirmar = document.getElementById("btn-confirmar");
     var seletor = document.getElementById("documento");
     var campoValor = document.getElementById("valor");
+    var tipoNovo = document.getElementById("tipo-novo");
+    var tipoCadastro = document.getElementById("tipo-cadastro");
     var fonte = null;
+    var CAMPOS_NOVO = ["documento", "razao_social", "email", "telefone", "logradouro", "numero",
+      "complemento", "bairro", "cod_municipio", "uf", "cep"];
+
+    function tomadorNovo() { return tipoNovo && tipoNovo.checked; }
+
+    /* Alterna entre escolher do cadastro e digitar um tomador na hora. */
+    function mostrarTomador() {
+      document.getElementById("bloco-cadastro").hidden = tomadorNovo();
+      document.getElementById("bloco-novo").hidden = !tomadorNovo();
+    }
+    [tipoNovo, tipoCadastro].forEach(function (r) {
+      if (r) r.addEventListener("change", mostrarTomador);
+    });
 
     /* Máscara de moeda: digita só números, o R$ se forma da direita para a
        esquerda (como numa maquininha de cartão) — ninguém precisa pensar em
@@ -367,7 +452,14 @@
 
     function disparar(modo, textoConfirmacao) {
       var dados = new FormData();
+      dados.append("tipo_tomador", tomadorNovo() ? "novo" : "cadastro");
       dados.append("documento", seletor.value);
+      CAMPOS_NOVO.forEach(function (nome) {
+        dados.append("novo_" + nome, document.getElementById("novo_" + nome).value);
+      });
+      dados.append("novo_salvar", document.getElementById("novo_salvar").checked ? "1" : "");
+      dados.append("servico_ctribnac", document.getElementById("servico_ctribnac").value);
+      dados.append("servico_ctribmun", document.getElementById("servico_ctribmun").value);
       dados.append("competencia", document.getElementById("competencia").value);
       dados.append("valor", document.getElementById("valor").value);
       dados.append("descricao", document.getElementById("descricao").value);
@@ -387,7 +479,7 @@
           acompanhar();
         })
         .catch(function (erro) {
-          situacao.textContent = "Falha na comunicação: " + erro;
+          situacao.textContent = MSG_SEM_CONEXAO;
           habilitar(true);
         });
     }
@@ -397,7 +489,11 @@
     document.getElementById("btn-emitir-avulsa").addEventListener("click", function () {
       if (!cfg.producao) { disparar("emitir"); return; }
       var opcao = seletor.selectedOptions[0];
-      document.getElementById("modal-cliente").textContent = opcao ? opcao.textContent : "—";
+      var nome = tomadorNovo()
+        ? (document.getElementById("novo_razao_social").value + " — " +
+           document.getElementById("novo_documento").value)
+        : (opcao && opcao.value ? opcao.textContent : "—");
+      document.getElementById("modal-cliente").textContent = nome;
       document.getElementById("modal-valor").textContent =
         "R$ " + (document.getElementById("valor").value || "0,00");
       document.getElementById("modal-competencia").textContent =
@@ -486,7 +582,7 @@
           acompanhar(situacao);
         })
         .catch(function (erro) {
-          situacao.textContent = "Falha na comunicação: " + erro;
+          situacao.textContent = MSG_SEM_CONEXAO;
           travarBotoes(false);
         });
     }

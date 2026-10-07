@@ -122,6 +122,27 @@ def test_outras_rejeicoes_nao_ganham_o_contexto_do_e0312(
     assert "cTribNac" not in registro.detalhe
 
 
+def test_rejeicao_conhecida_explica_o_que_fazer(
+    config, linha, certificado_teste, email_desligado
+):
+    emissor, _ = _montar(
+        config, certificado_teste, email_desligado,
+        [_rejeitada("[E0712] Não é permitido informar indTotTrib…")],
+    )
+
+    registro = emissor.emitir_uma(linha, OpcoesEmissao(competencia=COMPETENCIA))
+
+    assert "O que fazer" in registro.detalhe
+    assert "número não foi gasto" in registro.detalhe
+
+
+def test_explicar_ignora_codigos_desconhecidos():
+    from nfse.rejeicoes import explicar
+
+    assert explicar(["[E9999] algo novo"]) == ""
+    assert "Simples" in explicar(["[E0712] x"])
+
+
 def test_rejeicao_nao_consome_numeracao(config, linha, certificado_teste, email_desligado):
     """A Sefin não registrou nada, então o número continua livre."""
     emissor, _ = _montar(

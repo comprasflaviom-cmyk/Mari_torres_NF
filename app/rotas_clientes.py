@@ -177,13 +177,13 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
         if outra := _conflito_de_maquina(config):
             return JSONResponse({"ok": False, "mensagem": _mensagem_conflito(config, outra)}, 409)
 
-        cliente = repositorio_clientes().buscar(str(formulario.get("documento", "")))
-        if cliente is None:
-            return JSONResponse({"ok": False, "mensagem": "Selecione um cliente do cadastro."}, 400)
-        if not cliente.ativo:
-            return JSONResponse(
-                {"ok": False, "mensagem": f"{cliente.razao_social} está inativo no cadastro."}, 400
-            )
+        cliente, salvar_novo = _tomador_da_nota(formulario)
+        if isinstance(cliente, str):
+            return JSONResponse({"ok": False, "mensagem": cliente}, 400)
+
+        codigos = _codigos_da_nota(formulario)
+        if isinstance(codigos, str):
+            return JSONResponse({"ok": False, "mensagem": codigos}, 400)
 
         try:
             valor = Decimal(str(formulario.get("valor", "")).replace(".", "").replace(",", "."))
@@ -221,7 +221,15 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
             descricao=descricao,
             extras=cliente.extras_para_dps(),
             enviar_email=cliente.receber_por_email,
+            codigo_tributacao_nacional=codigos[0] if codigos else None,
+            codigo_tributacao_municipal=codigos[1] if codigos else None,
         )
+
+        if salvar_novo and not dry_run:
+            # Só cria (e só na emissão de verdade): nunca sobrescreve um cadastro.
+            repo = repositorio_clientes()
+            if repo.buscar(cliente.documento) is None:
+                repo.salvar(cliente)
 
         try:
             ESTADO.trabalho.iniciar(
@@ -236,3 +244,60 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
             return JSONResponse({"ok": False, "mensagem": str(exc)}, 409)
 
         return JSONResponse({"ok": True, "total": 1, "dry_run": dry_run})
+
+
+def _tomador_da_nota(formulario) -> tuple[Cliente | str, bool]:
+    """Cliente do cadastro ou tomador digitado na hora.
+
+    Devolve (cliente, salvar_no_cadastro) ou (mensagem de erro, False).
+    """
+    if str(formulario.get("tipo_tomador", "cadastro")) != "novo":
+        cliente = repositorio_clientes().buscar(str(formulario.get("documento", "")))
+        if cliente is None:
+            return "Escolha um cliente da lista (ou marque \"Outro tomador\" para digitar um).", False
+        if not cliente.ativo:
+            return f"{cliente.razao_social} está inativo no cadastro. Reative-o em Clientes.", False
+        return cliente, False
+
+    def campo(nome: str) -> str:
+        return " ".join(str(formulario.get(f"novo_{nome}", "")).split())
+
+    email = campo("email")
+    cliente = Cliente(
+        documento=campo("documento"),
+        razao_social=campo("razao_social"),
+        email=email,
+        logradouro=campo("logradouro"),
+        numero=campo("numero"),
+        complemento=campo("complemento"),
+        bairro=campo("bairro"),
+        cod_municipio=somente_digitos(campo("cod_municipio")),
+        uf=campo("uf").upper(),
+        cep=somente_digitos(campo("cep")),
+        telefone=campo("telefone"),
+        receber_por_email=bool(email),
+    )
+    try:
+        cliente.validar()
+    except ErroCadastro as exc:
+        return f"Confira o tomador: {exc}", False
+    salvar = str(formulario.get("novo_salvar", "")) in ("1", "true", "on")
+    return cliente, salvar
+
+
+def _codigos_da_nota(formulario) -> tuple[str, str] | None | str:
+    """Códigos de serviço escolhidos para esta nota.
+
+    None = o formulário não mandou os campos, vale o da Configuração.
+    Texto = mensagem de erro.
+    """
+    if "servico_ctribnac" not in formulario:
+        return None
+    nacional = somente_digitos(str(formulario.get("servico_ctribnac", "")))
+    if len(nacional) != 6:
+        return ("O código de tributação nacional tem 6 dígitos (ex.: 17.03.03 → 170303). "
+                "Copie do portal gov.br, na nota que você já emite para este serviço.")
+    municipal = somente_digitos(str(formulario.get("servico_ctribmun", "")))[-3:]
+    if municipal and len(municipal) != 3:
+        return "O código complementar municipal tem 3 dígitos (ex.: 001) ou fica vazio."
+    return nacional, municipal

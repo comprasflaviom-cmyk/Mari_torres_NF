@@ -29,6 +29,7 @@ from .email_envio import ConfiguracaoEmail, ErroEmail, enviar_nfse
 from .estado import ConflitoDeMaquina, ControleEmissao, impressao_da_linha, nome_da_maquina
 from .logs import RegistroLinha, Relatorio
 from .planilha import LinhaFaturamento
+from .rejeicoes import explicar
 
 # Assinatura do callback de progresso.
 AoProgredir = Callable[["EventoProgresso"], None]
@@ -217,14 +218,14 @@ class Emissor:
                     linha, resposta, xml_assinado,
                 )
                 registro.situacao = "REJEITADA"
-                registro.detalhe = resposta.motivo_erro + self._contexto_da_rejeicao(resposta)
+                registro.detalhe = resposta.motivo_erro + self._contexto_da_rejeicao(resposta, linha)
                 # Número não consumido: a Sefin não registrou nada.
                 self.controle.ultimo_numero -= 1
                 ao_progredir(EventoProgresso(
                     tipo="fim_linha", situacao="REJEITADA", registro=registro, **contexto,
                     mensagem=(
                         f"{rotulo} | REJEITADA (HTTP {resposta.status_http}): "
-                        f"{resposta.motivo_erro}{self._contexto_da_rejeicao(resposta)}"
+                        f"{resposta.motivo_erro}{self._contexto_da_rejeicao(resposta, linha)}"
                     ),
                 ))
 
@@ -249,22 +250,27 @@ class Emissor:
         caminho.write_bytes(xml_assinado)
         return caminho
 
-    def _contexto_da_rejeicao(self, resposta) -> str:
-        """Acrescenta à rejeição o dado que ela cobra mas não mostra.
+    def _contexto_da_rejeicao(self, resposta, linha) -> str:
+        """Acrescenta à rejeição o que ela cobra mas não mostra, e o que fazer.
 
         O E0312 diz que o código de tributação não é administrado pelo
-        município, sem dizer qual código foi enviado nem para qual município —
-        e é exatamente isso que a pessoa precisa conferir para saber se a
-        correção que ela acabou de fazer na Configuração chegou a valer.
+        município, sem dizer qual código foi enviado — e é exatamente isso que
+        a pessoa precisa conferir. Para os códigos conhecidos, vem também a
+        explicação em português simples (nfse/rejeicoes.py).
         """
-        if not any("E0312" in m for m in resposta.mensagens):
-            return ""
-        serv = self.config.servico
-        return (
-            f" [enviamos cTribNac={serv.codigo_tributacao_nacional}"
-            f" cTribMun={serv.codigo_tributacao_municipal or '(vazio)'}"
-            f" para o município {serv.codigo_municipio_prestacao}]"
-        )
+        contexto = ""
+        if any("E0312" in m for m in resposta.mensagens):
+            serv = self.config.servico
+            nacional, municipal = linha.codigos_de_servico(
+                serv.codigo_tributacao_nacional, serv.codigo_tributacao_municipal
+            )
+            contexto = (
+                f" [enviamos cTribNac={nacional} cTribMun={municipal or '(vazio)'}"
+                f" para o município {serv.codigo_municipio_prestacao}]"
+            )
+        if explicacao := explicar(resposta.mensagens):
+            contexto += f" → O que fazer: {explicacao}"
+        return contexto
 
     def _concluir_autorizada(
         self, linha, opcoes, resposta, xml_assinado, impressao,

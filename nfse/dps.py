@@ -127,9 +127,12 @@ def montar_dps(
 
     # ---- Serviço ----------------------------------------------------------
     # Ordem de TCCServ: cTribNac, cTribMun (opcional), xDescServ.
-    c_serv: dict[str, Any] = {"cTribNac": serv.codigo_tributacao_nacional}
-    if serv.codigo_tributacao_municipal:
-        c_serv["cTribMun"] = serv.codigo_tributacao_municipal
+    c_trib_nac, c_trib_mun = linha.codigos_de_servico(
+        serv.codigo_tributacao_nacional, serv.codigo_tributacao_municipal
+    )
+    c_serv: dict[str, Any] = {"cTribNac": c_trib_nac}
+    if c_trib_mun:
+        c_serv["cTribMun"] = c_trib_mun
     c_serv["xDescServ"] = linha.descricao
     bloco_servico = {
         "locPrest": {"cLocPrestacao": serv.codigo_municipio_prestacao},

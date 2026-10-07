@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<div class="cartao" style="max-width:640px; margin:32px auto">
+  <h1 style="margin-top:0">{{ titulo }}</h1>
+  <p>{{ mensagem }}</p>
+  {% if caminho_log %}
+    <p class="discreto">
+      Se acontecer de novo, envie ao suporte o arquivo
+      <span class="mono">{{ caminho_log }}</span> — ele tem o detalhe técnico.
+    </p>
+  {% endif %}
+  <div class="acoes">
+    <a class="botao botao-principal" href="/">Voltar ao painel</a>
+    <a class="botao" href="javascript:history.back()">Voltar à tela anterior</a>
+  </div>
+</div>
+{% endblock %}

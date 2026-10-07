@@ -2,28 +2,85 @@
 {% set pagina_atual = 'avulsa' %}
 {% block conteudo %}
 <h1>Nota avulsa</h1>
-<p class="subtitulo">Uma nota só, digitada na hora, sem passar por planilha.</p>
+<p class="subtitulo">
+  Uma nota só, digitada na hora, sem planilha — o mesmo que emitir à mão no portal
+  gov.br. O tomador pode ser do cadastro ou digitado agora.
+</p>
 
-{% if not clientes %}
-  <div class="cartao vazio">
-    <p>Nenhum cliente ativo no cadastro.</p>
-    <a class="botao botao-principal" href="/clientes/novo">Cadastrar um cliente</a>
-  </div>
-{% else %}
 <div class="cartao">
+  <h2 style="margin-top:0">Tomador</h2>
+  <div class="acoes" style="margin-top:0">
+    <label class="campo-caixa" style="margin:0">
+      <input type="radio" name="tipo_tomador" id="tipo-cadastro" value="cadastro"
+             {{ 'checked' if clientes else 'disabled' }}>
+      <span>Cliente do cadastro</span>
+    </label>
+    <label class="campo-caixa" style="margin:0">
+      <input type="radio" name="tipo_tomador" id="tipo-novo" value="novo" {{ '' if clientes else 'checked' }}>
+      <span>Outro tomador (digitar agora)</span>
+    </label>
+  </div>
+
+  <div id="bloco-cadastro" class="campo" style="margin-top:14px" {{ '' if clientes else 'hidden' }}>
+    <label for="documento">Cliente</label>
+    <select id="documento">
+      <option value="">Selecione...</option>
+      {% for c in clientes %}
+      <option value="{{ c.documento }}" data-email="{{ c.email }}"
+              data-recebe="{{ '1' if c.receber_por_email else '0' }}">
+        {{ c.razao_social }} — {{ c.documento }}
+      </option>
+      {% endfor %}
+    </select>
+    <span class="dica" id="dica-cliente">Só clientes ativos aparecem aqui.</span>
+  </div>
+
+  <div id="bloco-novo" style="margin-top:14px" {{ 'hidden' if clientes else '' }}>
+    <div class="grade">
+      <div class="campo"><label for="novo_documento">CNPJ ou CPF</label>
+        <input type="text" id="novo_documento" autocomplete="off"></div>
+      <div class="campo"><label for="novo_razao_social">Razão social / Nome</label>
+        <input type="text" id="novo_razao_social"></div>
+      <div class="campo"><label for="novo_email">E-mail</label>
+        <input type="email" id="novo_email">
+        <span class="dica">Se preenchido, a nota é enviada para cá.</span></div>
+      <div class="campo"><label for="novo_telefone">Telefone</label>
+        <input type="text" id="novo_telefone"></div>
+      <div class="campo"><label for="novo_logradouro">Logradouro</label>
+        <input type="text" id="novo_logradouro"></div>
+      <div class="campo"><label for="novo_numero">Número</label>
+        <input type="text" id="novo_numero"></div>
+      <div class="campo"><label for="novo_complemento">Complemento</label>
+        <input type="text" id="novo_complemento"></div>
+      <div class="campo"><label for="novo_bairro">Bairro</label>
+        <input type="text" id="novo_bairro"></div>
+      <div class="campo"><label for="novo_cod_municipio">Município (código IBGE)</label>
+        <input type="text" id="novo_cod_municipio" placeholder="3304557">
+        <span class="dica">7 dígitos. 3304557 = Rio de Janeiro/RJ.</span></div>
+      <div class="campo"><label for="novo_uf">UF</label>
+        <input type="text" id="novo_uf" maxlength="2"></div>
+      <div class="campo"><label for="novo_cep">CEP</label>
+        <input type="text" id="novo_cep"></div>
+    </div>
+    <p class="discreto" style="font-size:12px;margin:10px 0 0">Endereço é opcional, mas se informar o município, preencha CEP, logradouro, número e bairro.</p>
+    <div class="campo-caixa" style="margin-top:10px">
+      <input type="checkbox" id="novo_salvar" checked>
+      <label for="novo_salvar" style="font-weight:400">Salvar este tomador no cadastro de clientes</label>
+    </div>
+  </div>
+</div>
+
+<div class="cartao">
+  <h2 style="margin-top:0">Serviço</h2>
   <div class="grade">
     <div class="campo">
-      <label for="documento">Cliente</label>
-      <select id="documento">
-        <option value="">Selecione...</option>
-        {% for c in clientes %}
-        <option value="{{ c.documento }}" data-email="{{ c.email }}"
-                data-recebe="{{ '1' if c.receber_por_email else '0' }}">
-          {{ c.razao_social }} — {{ c.documento }}
-        </option>
-        {% endfor %}
-      </select>
-      <span class="dica" id="dica-cliente">Só clientes ativos aparecem aqui.</span>
+      <label for="servico_ctribnac">Código de tributação nacional</label>
+      <input type="text" id="servico_ctribnac" value="{{ config.servico_ctribnac }}">
+      <span class="dica">Já vem o da Configuração. Troque só se esta nota for de outro serviço.</span>
+    </div>
+    <div class="campo">
+      <label for="servico_ctribmun">Código complementar municipal</label>
+      <input type="text" id="servico_ctribmun" value="{{ config.servico_ctribmun }}" placeholder="ex.: 001">
     </div>
     <div class="campo">
       <label for="competencia">Competência</label>
@@ -37,7 +94,7 @@
   <div class="campo" style="margin-top:16px">
     <label for="descricao">Descrição do serviço</label>
     <textarea id="descricao" placeholder="Consultoria estratégica em processos comerciais."></textarea>
-    <span class="dica">Vai para o campo xDescServ da nota. Até 2000 caracteres.</span>
+    <span class="dica">É o texto que o cliente lê na nota. Até 2000 caracteres.</span>
   </div>
 
   <div class="acoes">
@@ -84,5 +141,4 @@
     avulsa: true
   };
 </script>
-{% endif %}
 {% endblock %}

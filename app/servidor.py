@@ -17,6 +17,8 @@ from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi.exception_handlers import http_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.datastructures import UploadFile as ArquivoDeFormulario
 from fastapi.responses import (
     FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse,
@@ -38,7 +40,8 @@ from nfse.servico import OpcoesEmissao, montar_emissor
 
 from .recorrencias import registrar as registrar_rotas_recorrencias, repositorio_recorrencias
 from .rotas_clientes import registrar as registrar_rotas_clientes, repositorio_clientes, repositorio_emissoes
-from .seguranca import Guardiao, gravar_cookie, montar_middleware
+from .ajuda import AJUDA
+from .seguranca import NOME_HEADER, Guardiao, gravar_cookie, montar_middleware
 from .sessao import ESTADO, LoteEmAndamento, importar_planilha
 
 def _raiz_dos_recursos() -> Path:
@@ -68,17 +71,39 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
     app.middleware("http")(montar_middleware(guardiao))
     app.mount("/static", StaticFiles(directory=RAIZ / "static"), name="static")
 
+    def tela_de_erro(requisicao: Request, titulo: str, mensagem: str, status: int, caminho_log=None):
+        # Botões da interface (fetch) esperam JSON: devolvem a mesma mensagem
+        # simpática no formato que a tela já sabe mostrar.
+        if requisicao.headers.get(NOME_HEADER):
+            return JSONResponse({"ok": False, "mensagem": f"{titulo}. {mensagem}"}, status_code=status)
+        try:
+            resposta = pagina(requisicao, "erro.html", titulo=titulo, mensagem=mensagem,
+                              caminho_log=caminho_log)
+            resposta.status_code = status
+            return resposta
+        except Exception:  # noqa: BLE001 — se até a tela de erro falhar, texto simples
+            return HTMLResponse(f"<h2>{titulo}</h2><p>{mensagem}</p><p><a href='/'>Voltar</a></p>",
+                                status_code=status)
+
     @app.exception_handler(Exception)
     async def erro_inesperado(requisicao: Request, exc: Exception):
         """No executável não há console: sem isto, um erro vira só "Internal
-        Server Error" e o motivo se perde. Grava o traceback e diz onde está."""
+        Server Error" e o motivo se perde. Grava o traceback e mostra uma
+        mensagem que a pessoa entende."""
         caminho = _registrar_erro(requisicao, exc)
-        return HTMLResponse(
-            "<h2>Algo deu errado nesta tela.</h2>"
-            f"<p>O detalhe foi salvo em <code>{caminho}</code>. Envie esse arquivo para o suporte.</p>"
-            '<p><a href="/">Voltar ao painel</a></p>',
-            status_code=500,
+        return tela_de_erro(
+            requisicao, "Algo não saiu como esperado",
+            "Nada foi transmitido por causa deste erro. Tente de novo; se continuar, "
+            "envie ao suporte o arquivo erros.log da pasta do aplicativo.",
+            500, caminho_log=caminho,
         )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def erro_http(requisicao: Request, exc: StarletteHTTPException):
+        if exc.status_code == 404:
+            return tela_de_erro(requisicao, "Página não encontrada",
+                                "Este endereço não existe no aplicativo. Use o menu acima.", 404)
+        return await http_exception_handler(requisicao, exc)
     modelos = Jinja2Templates(directory=str(RAIZ / "templates"))
     modelos.env.filters["moeda"] = _moeda_br
 
@@ -93,6 +118,7 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
                 "producao": config.ambiente == "producao",
                 "pendencias": config.pendencias(),
                 "token": guardiao.token,
+                "ajuda": AJUDA,
                 **contexto,
             },
         )

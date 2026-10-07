@@ -6,7 +6,7 @@
   <title>{% block titulo %}Emissor de NFS-e{% endblock %}</title>
   <link rel="stylesheet" href="/static/estilo.css">
 </head>
-<body>
+<body data-pagina="{{ pagina_atual }}">
   <!-- A faixa de ambiente é permanente e de cor inequívoca: é a defesa
        principal contra emitir em produção achando que é teste. -->
   <div class="faixa {{ 'faixa-producao' if producao else 'faixa-homologacao' }}">
@@ -43,6 +43,7 @@
   </main>
 
   <script>window.EMISSOR_TOKEN = {{ token | tojson }};</script>
+  <script>window.EMISSOR_AJUDA = {{ (ajuda or {}) | tojson }};</script>
   <script src="/static/app.js"></script>
   {% block scripts %}{% endblock %}
 </body>

@@ -158,6 +158,18 @@ def test_ctribmun_vai_entre_ctribnac_e_descricao(config, linha):
     assert c_serv.find("n:cTribMun", NS).text == "001"
 
 
+def test_nota_avulsa_pode_trocar_o_codigo_de_servico(config, linha):
+    """Nota avulsa de outro serviço: os códigos da nota valem sobre a Configuração."""
+    from dataclasses import replace
+
+    config.servico = replace(config.servico, codigo_tributacao_municipal="001")
+    linha = replace(linha, codigo_tributacao_nacional="010101", codigo_tributacao_municipal="")
+    raiz = etree.fromstring(dps_para_xml(montar_dps(config, linha, 1)))
+    c_serv = raiz.find("n:infDPS/n:serv/n:cServ", NS)
+    assert [etree.QName(f).localname for f in c_serv] == ["cTribNac", "xDescServ"]
+    assert c_serv.find("n:cTribNac", NS).text == "010101"
+
+
 def test_me_epp_informa_percentual_do_simples_e_nao_o_indicador(config, linha):
     """Rejeição real E0712: para ME/EPP a Sefin proíbe indTotTrib."""
     raiz = etree.fromstring(dps_para_xml(montar_dps(config, linha, 1)))

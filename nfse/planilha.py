@@ -52,6 +52,16 @@ class LinhaFaturamento:
     # NFS-e por e-mail. A nota é emitida e arquivada do mesmo jeito.
     enviar_email: bool = True
 
+    # Códigos de serviço só desta nota (nota manual). None = os da Configuração.
+    codigo_tributacao_nacional: str | None = None
+    codigo_tributacao_municipal: str | None = None
+
+    def codigos_de_servico(self, padrao_nacional: str, padrao_municipal: str) -> tuple[str, str]:
+        """(cTribNac, cTribMun) que vão nesta nota."""
+        if self.codigo_tributacao_nacional is None:
+            return padrao_nacional, padrao_municipal
+        return self.codigo_tributacao_nacional, self.codigo_tributacao_municipal or ""
+
     @property
     def tipo_documento(self) -> str:
         return "CNPJ" if len(self.documento_tomador) == 14 else "CPF"

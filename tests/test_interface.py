@@ -533,7 +533,7 @@ def test_nota_avulsa_recusa_cliente_inativo(cliente):
 def test_nota_avulsa_recusa_cliente_desconhecido(cliente):
     resposta = _avulsa(cliente, documento="11444777000161")
     assert resposta.status_code == 400
-    assert "Selecione um cliente" in resposta.json()["mensagem"]
+    assert "Escolha um cliente" in resposta.json()["mensagem"]
 
 
 def test_nota_avulsa_valida_valor_e_descricao(cliente):
@@ -924,3 +924,123 @@ def test_erro_inesperado_vai_para_o_log(dados_app, monkeypatch):
     assert "erros.log" in resposta.text
     log = (ac.diretorio_dados() / "erros.log").read_text(encoding="utf-8")
     assert "POST /importar" in log and "falha de teste" in log
+
+
+# ---------------------------------------------------------------------------
+# Nota avulsa com tomador digitado na hora
+# ---------------------------------------------------------------------------
+NOVO_TOMADOR = {
+    "tipo_tomador": "novo",
+    "documento": "",
+    "novo_documento": "11.444.777/0001-61",
+    "novo_razao_social": "Tomador Avulso LTDA",
+    "novo_email": "",
+    "servico_ctribnac": "01.01.01",
+    "servico_ctribmun": "",
+}
+
+
+def test_nota_avulsa_aceita_tomador_digitado_e_codigo_proprio(cliente, dados_app):
+    resposta = _avulsa(cliente, **NOVO_TOMADOR)
+    assert resposta.status_code == 200, resposta.text
+
+    cliente.get("/emitir/eventos")
+    xml = next((dados_app / "notas" / "dry-run").glob("*.xml")).read_bytes()
+    assert b"Tomador Avulso LTDA" in xml
+    assert b"<cTribNac>010101</cTribNac>" in xml
+    assert b"cTribMun" not in xml
+
+
+def test_nota_avulsa_tomador_com_cnpj_invalido(cliente):
+    resposta = _avulsa(cliente, **{**NOVO_TOMADOR, "novo_documento": "11444777000100"})
+    assert resposta.status_code == 400
+    assert "Confira o tomador" in resposta.json()["mensagem"]
+
+
+def test_nota_avulsa_codigo_de_servico_invalido(cliente):
+    resposta = _avulsa(cliente, **{**NOVO_TOMADOR, "servico_ctribnac": "1703"})
+    assert resposta.status_code == 400
+    assert "6 dígitos" in resposta.json()["mensagem"]
+
+
+def test_nota_avulsa_salva_tomador_so_na_emissao_e_sem_sobrescrever(cliente, monkeypatch):
+    from app.rotas_clientes import repositorio_clientes
+
+    monkeypatch.setattr(ESTADO.trabalho, "iniciar", lambda **kw: None)
+    dados = {**NOVO_TOMADOR, "novo_salvar": "1"}
+
+    _avulsa(cliente, **dados)                      # simulação não salva
+    assert repositorio_clientes().buscar("11444777000161") is None
+
+    assert _avulsa(cliente, **dados, modo="emitir").status_code == 200
+    assert repositorio_clientes().buscar("11444777000161").razao_social == "Tomador Avulso LTDA"
+
+    _avulsa(cliente, **{**dados, "novo_razao_social": "Outro Nome"}, modo="emitir")
+    assert repositorio_clientes().buscar("11444777000161").razao_social == "Tomador Avulso LTDA"
+
+
+def test_tela_avulsa_mostra_formulario_sem_clientes(cliente):
+    html = cliente.get("/avulsa").text
+    assert 'id="novo_documento"' in html
+    assert 'id="servico_ctribnac"' in html
+
+
+# ---------------------------------------------------------------------------
+# Erros amigáveis e ajuda
+# ---------------------------------------------------------------------------
+def test_pagina_inexistente_mostra_tela_amigavel(cliente):
+    resposta = cliente.get("/nao-existe")
+    assert resposta.status_code == 404
+    assert "Página não encontrada" in resposta.text
+
+
+def _cliente_que_quebra(dados_app, monkeypatch):
+    import app.rotas_clientes as rotas
+
+    def quebrar(*a, **k):
+        raise RuntimeError("detalhe técnico interno")
+
+    monkeypatch.setattr(rotas, "repositorio_clientes", quebrar)
+    return TestClient(criar_app(Guardiao(TOKEN)), base_url="http://127.0.0.1:8765",
+                      raise_server_exceptions=False)
+
+
+def test_erro_inesperado_vira_tela_amigavel_e_log(dados_app, monkeypatch):
+    navegador = _cliente_que_quebra(dados_app, monkeypatch)
+    resposta = navegador.get("/clientes")
+    assert resposta.status_code == 500
+    assert "Algo não saiu como esperado" in resposta.text
+    assert "detalhe técnico interno" not in resposta.text
+    assert "detalhe técnico interno" in (ac.diretorio_dados() / "erros.log").read_text(encoding="utf-8")
+
+
+def test_erro_inesperado_em_chamada_da_tela_vira_json(dados_app, monkeypatch):
+    navegador = _cliente_que_quebra(dados_app, monkeypatch)
+    resposta = navegador.post("/avulsa/emitir", headers={NOME_HEADER: TOKEN},
+                              data={"documento": "11222333000181"})
+    assert resposta.status_code == 500
+    assert resposta.json()["ok"] is False
+    assert "Algo não saiu como esperado" in resposta.json()["mensagem"]
+
+
+def test_toda_ajuda_aponta_para_um_campo_que_existe():
+    """Pega erro de digitação no id: ajuda que não aparece em lugar nenhum."""
+    import re
+
+    from app.ajuda import AJUDA
+
+    pasta = Path(__file__).resolve().parent.parent / "app" / "templates"
+    ids = set()
+    for modelo in pasta.glob("*.html"):
+        tela = re.search(r"pagina_atual = '(\w+)'", modelo.read_text(encoding="utf-8"))
+        for id_ in re.findall(r'<label for="([^"]+)"', modelo.read_text(encoding="utf-8")):
+            ids.add(id_)
+            if tela:
+                ids.add(f"{tela.group(1)}:{id_}")
+    assert sorted(set(AJUDA) - ids) == []
+
+
+def test_paginas_levam_os_textos_de_ajuda(cliente):
+    html = cliente.get("/configuracao").text
+    assert "window.EMISSOR_AJUDA" in html
+    assert "senha de app" in html
