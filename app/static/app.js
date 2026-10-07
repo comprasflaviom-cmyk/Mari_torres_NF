@@ -434,6 +434,19 @@
           barra.style.width = "100%";
           escrever(ev.mensagem, ev.situacao === "AUTORIZADA" ? "l-ok"
             : (ev.situacao === "PULADA" ? "l-fraco" : "l-erro"));
+          var chave = ev.registro && ev.registro.chave_acesso;
+          if (ev.situacao === "AUTORIZADA" && chave) {
+            /* Atalho para imprimir: o PDF também fica no Histórico. */
+            var link = document.createElement("a");
+            link.href = "/danfse/" + encodeURIComponent(chave);
+            link.target = "_blank";
+            link.className = "botao botao-pequeno";
+            link.textContent = "Abrir PDF da nota (imprimir / salvar)";
+            var linhaLink = document.createElement("div");
+            linhaLink.style.marginTop = "10px";
+            linhaLink.appendChild(link);
+            consoleEl.appendChild(linhaLink);
+          }
         } else if (ev.tipo === "encerrado") {
           situacao.textContent = ev.mensagem;
           habilitar(true);

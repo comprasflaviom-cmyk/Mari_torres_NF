@@ -1044,3 +1044,17 @@ def test_paginas_levam_os_textos_de_ajuda(cliente):
     html = cliente.get("/configuracao").text
     assert "window.EMISSOR_AJUDA" in html
     assert "senha de app" in html
+
+
+def test_nota_avulsa_autorizada_entra_no_historico(cliente, monkeypatch):
+    """O botão PDF (imprimir) fica no Histórico: a nota avulsa precisa estar lá."""
+    from app.rotas_clientes import repositorio_emissoes
+
+    monkeypatch.setattr("app.rotas_clientes.montar_emissor",
+                        lambda *a, **k: _emissor_falso(ac.carregar(), "CHAVE-AVULSA1"))
+    resposta = _avulsa(cliente, **NOVO_TOMADOR, modo="emitir")
+    assert resposta.status_code == 200, resposta.text
+    cliente.get("/emitir/eventos")
+
+    assert "CHAVE-AVULSA1" in [n["chave_acesso"] if isinstance(n, dict) else n.chave_acesso
+                              for n in repositorio_emissoes().listar()]

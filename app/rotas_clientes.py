@@ -173,7 +173,7 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
                 {"ok": False, "mensagem": "Configuração incompleta: " + " ".join(pendencias)}, 400
             )
 
-        from .servidor import _conflito_de_maquina, _mensagem_conflito
+        from .servidor import _conflito_de_maquina, _mensagem_conflito, _registrar_no_historico
         if outra := _conflito_de_maquina(config):
             return JSONResponse({"ok": False, "mensagem": _mensagem_conflito(config, outra)}, 409)
 
@@ -239,6 +239,7 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
                 linhas=[linha],
                 opcoes=OpcoesEmissao(competencia=competencia, dry_run=dry_run),
                 ambiente=config.ambiente,
+                ao_autorizar=_registrar_no_historico(config.ambiente),
             )
         except LoteEmAndamento as exc:
             return JSONResponse({"ok": False, "mensagem": str(exc)}, 409)
