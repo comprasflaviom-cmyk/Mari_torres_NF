@@ -895,3 +895,32 @@ def test_reenviar_email_sem_xml_avisa(cliente):
     resposta = cliente.post("/historico/reenviar/NAOEXISTE", headers={NOME_HEADER: TOKEN})
     assert resposta.json()["ok"] is False
     assert "não está na pasta de notas" in resposta.json()["mensagem"]
+
+
+@pytest.mark.parametrize("nome, conteudo", [
+    ("planilha.xlsx", b"CNPJ_Cliente,Razao_Social\n1,2\n"),   # CSV com extensão trocada
+    ("planilha.xls", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\0" * 600),  # Excel 97-2003
+    ("planilha.xlsx", b""),
+])
+def test_planilha_em_outro_formato_explica_em_vez_de_erro_500(cliente, nome, conteudo):
+    """Caso real: a planilha corrigida voltou com erro 500 ao importar."""
+    resposta = cliente.post("/importar", headers={NOME_HEADER: TOKEN},
+                            files={"planilha": (nome, conteudo)})
+    assert resposta.status_code == 200
+    assert "Salvar como" in resposta.text and ".xlsx" in resposta.text
+
+
+def test_erro_inesperado_vai_para_o_log(dados_app, monkeypatch):
+    def quebra(*a, **k):
+        raise RuntimeError("falha de teste")
+
+    monkeypatch.setattr("app.servidor.importar_planilha", quebra)
+    cliente = TestClient(criar_app(Guardiao(TOKEN)), base_url="http://127.0.0.1:8765",
+                         raise_server_exceptions=False)
+    resposta = cliente.post("/importar", headers={NOME_HEADER: TOKEN},
+                            files={"planilha": ("p.xlsx", _planilha([LINHA_BOA]))})
+
+    assert resposta.status_code == 500
+    assert "erros.log" in resposta.text
+    log = (ac.diretorio_dados() / "erros.log").read_text(encoding="utf-8")
+    assert "POST /importar" in log and "falha de teste" in log

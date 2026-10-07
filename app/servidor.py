@@ -67,6 +67,18 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
 
     app.middleware("http")(montar_middleware(guardiao))
     app.mount("/static", StaticFiles(directory=RAIZ / "static"), name="static")
+
+    @app.exception_handler(Exception)
+    async def erro_inesperado(requisicao: Request, exc: Exception):
+        """No executável não há console: sem isto, um erro vira só "Internal
+        Server Error" e o motivo se perde. Grava o traceback e diz onde está."""
+        caminho = _registrar_erro(requisicao, exc)
+        return HTMLResponse(
+            "<h2>Algo deu errado nesta tela.</h2>"
+            f"<p>O detalhe foi salvo em <code>{caminho}</code>. Envie esse arquivo para o suporte.</p>"
+            '<p><a href="/">Voltar ao painel</a></p>',
+            status_code=500,
+        )
     modelos = Jinja2Templates(directory=str(RAIZ / "templates"))
     modelos.env.filters["moeda"] = _moeda_br
 
@@ -574,6 +586,22 @@ def _moeda_br(valor) -> str:
     except (TypeError, ValueError):
         return str(valor or "")
     return f"{numero:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _registrar_erro(requisicao: Request, exc: Exception) -> Path:
+    """Acrescenta o traceback a `erros.log` na pasta de dados (até ~1 MB)."""
+    import traceback
+
+    caminho = ac.diretorio_dados() / "erros.log"
+    try:
+        if caminho.exists() and caminho.stat().st_size > 1_000_000:
+            caminho.replace(caminho.with_suffix(".log.anterior"))
+        with caminho.open("a", encoding="utf-8") as log:
+            log.write(f"\n=== {datetime.now():%d/%m/%Y %H:%M:%S} {requisicao.method} {requisicao.url.path}\n")
+            log.write("".join(traceback.format_exception(exc)))
+    except OSError:
+        pass
+    return caminho
 
 
 def _carregar_config_tolerante() -> ac.ConfiguracaoApp:

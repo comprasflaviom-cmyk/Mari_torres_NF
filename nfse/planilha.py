@@ -108,7 +108,14 @@ def ler_planilha(caminho: Path) -> pd.DataFrame:
         raise ErroPlanilha(f"Planilha não encontrada: {caminho}")
 
     # dtype=str preserva CNPJs com zeros à esquerda; Valor_Servico é convertido depois.
-    df = pd.read_excel(caminho, engine="openpyxl", dtype=str)
+    try:
+        df = pd.read_excel(caminho, engine="openpyxl", dtype=str)
+    except Exception as exc:  # noqa: BLE001 — .xls, .csv, arquivo corrompido: tudo vira a mesma orientação
+        raise ErroPlanilha(
+            f"Não foi possível ler {caminho.name} como planilha do Excel (.xlsx). "
+            "Se ela foi salva como .xls, .csv ou em outro formato, abra no Excel e use "
+            "Arquivo → Salvar como → \"Pasta de Trabalho do Excel (*.xlsx)\"."
+        ) from exc
     df.columns = [str(c).strip() for c in df.columns]
 
     faltantes = [c for c in COLUNAS_OBRIGATORIAS if c not in df.columns]
