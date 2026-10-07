@@ -393,3 +393,25 @@ def test_controle_impede_emissao_duplicada(tmp_path, linha):
     assert recarregado.ultimo_numero == 1
     assert recarregado.ja_emitida(impressao)["chave_acesso"] == "3304557...CHAVE"
     assert recarregado.proximo_numero() == 2
+
+
+def test_celulas_vazias_nao_viram_nan_nem_derrubam_a_planilha(tmp_path):
+    """Caso real: planilha com valor em branco dava erro 500 na importação.
+    Célula vazia chega como NaN; antes virava "nan" ou quebrava o Decimal."""
+    base = {"CNPJ_Cliente": "11.222.333/0001-81", "Razao_Social": "Alfa",
+            "Email_Cliente": "a@alfa.com.br", "Valor_Servico": "100", "Descricao_Servico": "Consultoria."}
+    caminho = tmp_path / "f.xlsx"
+    pd.DataFrame([
+        base,
+        {**base, "Valor_Servico": None},
+        {**base, "Descricao_Servico": None},
+        {**base, "Email_Cliente": None},
+    ]).to_excel(caminho, index=False)
+
+    resultado = [(linha, erro) for _, linha, erro in iterar_faturamento(caminho)]
+
+    assert resultado[0][1] is None
+    assert resultado[1] == (None, "Valor_Servico está vazio.")
+    assert resultado[2][1] == "Descricao_Servico está vazia."
+    linha_sem_email, erro = resultado[3]
+    assert erro is None and linha_sem_email.email == ""

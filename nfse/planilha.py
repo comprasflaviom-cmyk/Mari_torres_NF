@@ -85,8 +85,23 @@ def validar_dv_cpf(cpf: str) -> bool:
     return True
 
 
+def _celula(linha: pd.Series, coluna: str) -> str:
+    """Texto da célula; vazio para célula vazia.
+
+    Com dtype=str, o pandas devolve NaN (um float) para célula vazia — e
+    `str(nan or "")` vira "nan", porque NaN é verdadeiro. Foi assim que valor
+    vazio derrubava a importação inteira e descrição vazia virava "nan".
+    """
+    valor = linha.get(coluna)
+    if valor is None or (isinstance(valor, float) and valor != valor):
+        return ""
+    return str(valor).strip()
+
+
 def _converter_valor(bruto: object) -> Decimal:
     """Aceita 1234.56, "1.234,56", "R$ 1.234,56" e devolve Decimal com 2 casas."""
+    if bruto in (None, ""):
+        raise ValueError("Valor_Servico está vazio.")
     if isinstance(bruto, (int, float, Decimal)):
         valor = Decimal(str(bruto))
     else:
@@ -97,6 +112,8 @@ def _converter_valor(bruto: object) -> Decimal:
             valor = Decimal(texto)
         except InvalidOperation as exc:
             raise ValueError(f"Valor_Servico inválido: {bruto!r}") from exc
+    if not valor.is_finite():
+        raise ValueError(f"Valor_Servico inválido: {bruto!r}")
     if valor <= 0:
         raise ValueError(f"Valor_Servico deve ser maior que zero (recebido: {bruto!r}).")
     return valor.quantize(Decimal("0.01"))
@@ -133,7 +150,7 @@ def validar_linha(indice: int, linha: pd.Series) -> LinhaFaturamento:
     # +2: pandas indexa a partir de 0 e a linha 1 do Excel é o cabeçalho.
     numero_linha = indice + 2
 
-    documento = somente_digitos(linha.get("CNPJ_Cliente"))
+    documento = somente_digitos(_celula(linha, "CNPJ_Cliente"))
     if len(documento) == 14:
         if not validar_dv_cnpj(documento):
             raise ValueError(f"CNPJ_Cliente com dígito verificador inválido: {documento}")
@@ -145,32 +162,28 @@ def validar_linha(indice: int, linha: pd.Series) -> LinhaFaturamento:
             f"CNPJ_Cliente deve ter 14 dígitos (ou 11, para CPF). Recebido: {documento or 'vazio'!r}"
         )
 
-    razao = str(linha.get("Razao_Social") or "").strip()
+    razao = _celula(linha, "Razao_Social")
     if not razao:
         raise ValueError("Razao_Social está vazia.")
 
-    email = str(linha.get("Email_Cliente") or "").strip()
+    email = _celula(linha, "Email_Cliente")
     if email and not _EMAIL.match(email):
         raise ValueError(f"Email_Cliente inválido: {email!r}")
 
-    descricao = " ".join(str(linha.get("Descricao_Servico") or "").split())
+    descricao = " ".join(_celula(linha, "Descricao_Servico").split())
     if len(descricao) < 1:
         raise ValueError("Descricao_Servico está vazia.")
     if len(descricao) > 2000:   # xDescServ do layout aceita até 2000 caracteres
         raise ValueError(f"Descricao_Servico excede 2000 caracteres ({len(descricao)}).")
 
-    extras = {
-        coluna: str(linha[coluna]).strip()
-        for coluna in COLUNAS_OPCIONAIS
-        if coluna in linha.index and pd.notna(linha[coluna]) and str(linha[coluna]).strip()
-    }
+    extras = {coluna: _celula(linha, coluna) for coluna in COLUNAS_OPCIONAIS if _celula(linha, coluna)}
 
     return LinhaFaturamento(
         numero_linha=numero_linha,
         documento_tomador=documento,
         razao_social=razao[:300],
         email=email,
-        valor_servico=_converter_valor(linha.get("Valor_Servico")),
+        valor_servico=_converter_valor(_celula(linha, "Valor_Servico")),
         descricao=descricao,
         extras=extras,
     )
@@ -187,3 +200,5 @@ def iterar_faturamento(caminho: Path):
             yield indice, validar_linha(indice, linha), None
         except ValueError as exc:
             yield indice, None, str(exc)
+        except Exception as exc:  # noqa: BLE001 — uma linha estranha não derruba a planilha inteira
+            yield indice, None, f"Linha ilegível ({type(exc).__name__}: {exc})."
