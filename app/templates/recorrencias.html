@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set pagina_atual = 'recorrencias' %}
 {% block conteudo %}
-<h1>Recorrências</h1>
+<h1>Notas mensais</h1>
 <p class="subtitulo">
   Notas mensais que o app monta sozinho, a partir do dia e do valor
   cadastrados em cada cliente — sem passar por planilha.
@@ -25,7 +25,7 @@
         {% for p in pendentes %}
         <tr data-id="{{ p.id }}">
           <td><strong>{{ p.razao_social }}</strong></td>
-          <td class="mono">{{ p.competencia }}</td>
+          <td>{{ p.competencia | competencia }}</td>
           <td>
             <input type="text" class="campo-valor" inputmode="numeric"
                    value="{{ p.valor | moeda if p.valor else '' }}" placeholder="0,00" autocomplete="off">
@@ -35,7 +35,7 @@
             <div class="acoes" style="margin:0; flex-wrap:nowrap">
               <button class="botao botao-pequeno {{ 'botao-perigo' if producao else '' }} botao-emitir-recorrencia"
                       type="button">
-                {{ 'Emitir em PRODUÇÃO' if producao else 'Emitir em homologação' }}
+                {{ 'Emitir nota real' if producao else 'Emitir nota de teste' }}
               </button>
               <button class="botao botao-pequeno botao-pular-recorrencia" type="button">Pular este mês</button>
             </div>
@@ -59,7 +59,7 @@
         {% for r in recentes %}
         <tr>
           <td>{{ r.razao_social }}</td>
-          <td class="mono">{{ r.competencia }}</td>
+          <td>{{ r.competencia | competencia }}</td>
           <td>
             <span class="etiqueta {{ 'etiqueta-ok' if r.estado == 'emitida' else 'etiqueta-neutra' }}">
               {{ 'Emitida' if r.estado == 'emitida' else 'Pulada' }}
@@ -75,7 +75,7 @@
 
 <div class="cortina" id="cortina-recorrencia" hidden>
   <div class="modal">
-    <h2>Emitir em produção</h2>
+    <h2>Emitir nota real</h2>
     <p>Esta nota terá <strong>valor fiscal real</strong>. Desfazer exige cancelamento formal.</p>
     <div class="campo">
       <label for="confirmacao-recorrencia">Digite <span class="mono">EMITIR EM PRODUCAO</span> para liberar</label>

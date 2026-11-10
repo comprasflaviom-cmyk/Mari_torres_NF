@@ -36,6 +36,7 @@ from nfse.danfse import gerar_danfse_do_arquivo, resumo_para_email
 from nfse.estado import ControleEmissao
 from nfse.email_envio import ErroEmail, enviar_nfse
 from nfse.planilha import ErroPlanilha
+from nfse.recibo import formatar_documento
 from nfse.armazenamento import (
     caminho_pdf_de, localizar_xml_da_nota, metadados_ao_lado, renomear_arquivos_antigos,
 )
@@ -118,6 +119,9 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         return await http_exception_handler(requisicao, exc)
     modelos = Jinja2Templates(directory=str(RAIZ / "templates"))
     modelos.env.filters["moeda"] = _moeda_br
+    modelos.env.filters["documento"] = formatar_documento
+    modelos.env.filters["data"] = _data_br
+    modelos.env.filters["competencia"] = _competencia_br
 
     def pagina(requisicao: Request, nome: str, **contexto) -> HTMLResponse:
         config = contexto.pop("config", None) or _carregar_config_tolerante()
@@ -131,6 +135,7 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
                 "pendencias": config.pendencias(),
                 "token": guardiao.token,
                 "ajuda": AJUDA,
+                "pendentes_mensais": _pendentes_mensais(),
                 **contexto,
             },
         )
@@ -379,16 +384,16 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
             return JSONResponse({
                 "ok": False,
                 "mensagem": (
-                    f"Não foi possível falar com a Sefin de {config.ambiente}: {exc}"
+                    f"Não foi possível falar com a Receita ({_modo(config.ambiente)}). "
+                    f"Confira a internet e o certificado. Detalhe: {exc}"
                 ),
             })
 
         return JSONResponse({
             "ok": True,
             "mensagem": (
-                f"Conexão com a Sefin de {config.ambiente} funcionando, e o certificado "
-                f"foi aceito no handshake (a consulta de teste respondeu HTTP "
-                f"{resposta.status_code}, como esperado para uma chave inexistente)."
+                f"Conexão com a Receita ({_modo(config.ambiente)}) funcionando, e o "
+                f"certificado foi aceito. (resposta de teste: HTTP {resposta.status_code})"
             ),
         })
 
@@ -629,6 +634,33 @@ def _moeda_br(valor) -> str:
     except (TypeError, ValueError):
         return str(valor or "")
     return f"{numero:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _modo(ambiente: str) -> str:
+    return "modo real" if ambiente == "producao" else "modo teste"
+
+
+def _pendentes_mensais() -> int:
+    """Notas mensais esperando ação — vira o número no menu "Emitir nota"."""
+    try:
+        return len(repositorio_recorrencias().listar_pendentes())
+    except Exception:  # noqa: BLE001 — contador do menu nunca derruba a página
+        return 0
+
+
+def _data_br(valor, com_hora: bool = False) -> str:
+    """'2026-10-07T14:03:00' -> '07/10/2026' (ou '07/10/2026 14:03')."""
+    texto = str(valor or "")
+    if len(texto) < 10 or texto[4] != "-":
+        return texto or "—"
+    data = f"{texto[8:10]}/{texto[5:7]}/{texto[:4]}"
+    return f"{data} {texto[11:16]}" if com_hora and len(texto) >= 16 else data
+
+
+def _competencia_br(valor) -> str:
+    """'2026-09' -> '09/2026'."""
+    texto = str(valor or "")
+    return f"{texto[5:7]}/{texto[:4]}" if len(texto) >= 7 and texto[4] == "-" else (texto or "—")
 
 
 def _registrar_erro(requisicao: Request, exc: Exception) -> Path:

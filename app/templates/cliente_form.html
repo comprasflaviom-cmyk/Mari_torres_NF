@@ -1,15 +1,43 @@
 {% extends "base.html" %}
 {% set pagina_atual = 'clientes' %}
 {% block conteudo %}
-<h1>{{ 'Editar cliente' if cliente and cliente.criado_em else 'Novo cliente' }}</h1>
-<p class="subtitulo">
-  O endereço preenchido aqui completa automaticamente as linhas da planilha que
-  não o trouxerem — endereço incompleto do tomador é causa comum de rejeição.
-</p>
+{% set editando = cliente and cliente.criado_em %}
+<div class="cabecalho-pagina">
+  <div>
+    <h1>{{ cliente.razao_social if editando else 'Novo cliente' }}</h1>
+    {% if editando %}
+      <p class="subtitulo">
+        {{ cliente.tipo_documento }} {{ cliente.documento | documento }}
+        <span class="etiqueta {{ 'etiqueta-ok' if cliente.ativo else 'etiqueta-neutra' }}">
+          {{ 'Ativo' if cliente.ativo else 'Inativo' }}</span>
+        {% if cliente.recorrente %}<span class="etiqueta etiqueta-neutra">Nota mensal dia {{ cliente.dia_emissao_recorrente }}</span>{% endif %}
+      </p>
+    {% else %}
+      <p class="subtitulo">Preencha os dados de quem recebe a nota. Só CNPJ/CPF e nome são obrigatórios.</p>
+    {% endif %}
+  </div>
+  {% if editando and cliente.ativo %}
+    <div class="acoes" style="margin-top:0">
+      <a class="botao botao-principal" href="/avulsa?documento={{ cliente.documento }}">Emitir nota</a>
+      <a class="botao" href="/recibos?documento={{ cliente.documento }}">Gerar recibo</a>
+    </div>
+  {% endif %}
+</div>
 
 {% if erro %}<div class="aviso aviso-erro">{{ erro }}</div>{% endif %}
 
+<div class="abas" role="tablist" data-abas>
+  <button type="button" class="aba" data-aba="dados">Dados</button>
+  <button type="button" class="aba" data-aba="endereco">Endereço</button>
+  <button type="button" class="aba" data-aba="mensal">Nota mensal</button>
+  {% if editando %}
+  <button type="button" class="aba" data-aba="notas">Notas emitidas <span class="contador">{{ notas | length }}</span></button>
+  <button type="button" class="aba" data-aba="recibos">Recibos <span class="contador">{{ recibos | length }}</span></button>
+  {% endif %}
+</div>
+
 <form method="post" action="/clientes">
+<section data-painel="dados">
   <div class="cartao">
     <h2 style="margin-top:0">Identificação</h2>
     <div class="grade">
@@ -69,6 +97,19 @@
   </div>
 
   <div class="cartao">
+    <div class="campo">
+      <label for="observacao">Observações internas</label>
+      <textarea id="observacao" name="observacao">{{ cliente.observacao if cliente else '' }}</textarea>
+      <span class="dica">Não vai para a nota. É anotação sua.</span>
+    </div>
+  </div>
+</section>
+
+<section data-painel="endereco">
+  <p class="discreto">
+    Opcional. Se a planilha de uma nota vier sem endereço, o app usa este.
+  </p>
+  <div class="cartao">
     <h2 style="margin-top:0">Endereço</h2>
     <div class="grade">
       <div class="campo">
@@ -103,8 +144,11 @@
     </div>
   </div>
 
+</section>
+
+<section data-painel="mensal">
   <div class="cartao">
-    <h2 style="margin-top:0">Emissão recorrente</h2>
+    <h2 style="margin-top:0">Nota mensal automática</h2>
     <p class="discreto">
       Preencha para o app montar a nota deste cliente sozinho todo mês, sem
       planilha. Deixe o dia em branco para continuar faturando só por
@@ -133,19 +177,13 @@
       <label for="descricao_recorrente">Descrição do serviço recorrente</label>
       <textarea id="descricao_recorrente" name="descricao_recorrente"
                 >{{ cliente.descricao_recorrente if cliente else '' }}</textarea>
-      <span class="dica">Vai para o campo xDescServ da nota, todo mês.</span>
+      <span class="dica">É o texto que o cliente lê na nota, todo mês.</span>
     </div>
   </div>
 
-  <div class="cartao">
-    <div class="campo">
-      <label for="observacao">Observações internas</label>
-      <textarea id="observacao" name="observacao">{{ cliente.observacao if cliente else '' }}</textarea>
-      <span class="dica">Não vai para a nota. É anotação sua.</span>
-    </div>
-  </div>
+</section>
 
-  <div class="acoes">
+  <div class="acoes" data-so-com-abas="dados endereco mensal">
     <button class="botao botao-principal" type="submit">Salvar cliente</button>
     <a class="botao" href="/clientes">Cancelar</a>
     {% if cliente and cliente.criado_em %}
@@ -156,4 +194,69 @@
     {% endif %}
   </div>
 </form>
+
+{% if editando %}
+<section data-painel="notas">
+  {% if notas %}
+  <div class="rolagem">
+    <table>
+      <thead><tr><th>Nº da nota</th><th>Competência</th><th class="numerico">Valor</th><th>Emitida em</th><th></th></tr></thead>
+      <tbody>
+        {% for n in notas %}
+        <tr>
+          <td><strong>{{ n.n_nfse or '—' }}</strong>{% if n.ambiente and n.ambiente != 'producao' %} <span class="etiqueta etiqueta-neutra">teste</span>{% endif %}</td>
+          <td>{{ n.competencia | competencia }}</td>
+          <td class="numerico">R$ {{ n.valor_servico | moeda }}</td>
+          <td class="discreto">{{ n.emitida_em | data }}</td>
+          <td>
+            <a class="botao botao-pequeno" href="/danfse/{{ n.chave_acesso }}" target="_blank">PDF</a>
+            <button class="botao botao-pequeno" type="button"
+                    data-testar="/historico/reenviar/{{ n.chave_acesso }}"
+                    data-saida="nota-{{ loop.index }}" data-aguarde="Enviando...">Reenviar e-mail</button>
+            <span id="nota-{{ loop.index }}" class="discreto"></span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="cartao vazio"><p>Nenhuma nota emitida para este cliente ainda.</p>
+    {% if cliente.ativo %}<a class="botao botao-principal" href="/avulsa?documento={{ cliente.documento }}">Emitir a primeira</a>{% endif %}
+  </div>
+  {% endif %}
+</section>
+
+<section data-painel="recibos">
+  {% if recibos %}
+  <div class="rolagem">
+    <table>
+      <thead><tr><th>Nº</th><th>Data</th><th class="numerico">Valor</th><th>E-mail</th><th></th></tr></thead>
+      <tbody>
+        {% for r in recibos %}
+        <tr>
+          <td><strong>{{ '%04d' % r.numero }}</strong></td>
+          <td>{{ r.data | data }}</td>
+          <td class="numerico">R$ {{ r.valor | moeda }}</td>
+          <td class="discreto">{{ ('enviado em ' ~ (r.enviado_em | data)) if r.enviado_em else 'não enviado' }}</td>
+          <td>
+            <a class="botao botao-pequeno" href="/recibos/{{ r.numero }}/pdf" target="_blank">PDF</a>
+            {% if r.email %}
+            <button class="botao botao-pequeno" type="button" data-testar="/recibos/{{ r.numero }}/enviar"
+                    data-saida="recibo-{{ r.numero }}" data-aguarde="Enviando...">Enviar e-mail</button>
+            {% endif %}
+            <span id="recibo-{{ r.numero }}" class="discreto"></span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="cartao vazio"><p>Nenhum recibo para este cliente ainda.</p>
+    <a class="botao botao-principal" href="/recibos?documento={{ cliente.documento }}">Gerar recibo</a>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
 {% endblock %}

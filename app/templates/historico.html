@@ -1,20 +1,17 @@
 {% extends "base.html" %}
 {% set pagina_atual = 'historico' %}
 {% block conteudo %}
-<h1>Histórico de notas</h1>
-<p class="subtitulo">
-  Índice das notas emitidas. Ele é reconstruível a partir da pasta de notas —
-  os arquivos em disco é que são a verdade.
-</p>
+<h1>Notas emitidas</h1>
+<p class="subtitulo">Todas as notas emitidas por este computador, da mais nova para a mais antiga.</p>
 
 {% if reconstruido is defined and reconstruido >= 0 %}
-  <div class="aviso aviso-ok"><strong>Histórico reconstruído:</strong> {{ reconstruido }} nota(s) encontrada(s) em disco.</div>
+  <div class="aviso aviso-ok"><strong>Lista atualizada:</strong> {{ reconstruido }} nota(s) encontrada(s) na pasta de notas.</div>
 {% endif %}
 
 <div class="cartao">
   <form method="get" action="/historico" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap">
     <div class="campo" style="flex:1; min-width:240px">
-      <label for="busca">Buscar por cliente, CNPJ ou chave de acesso</label>
+      <label for="busca">Buscar por cliente, CNPJ/CPF ou número da nota</label>
       <input type="text" id="busca" name="busca" value="{{ busca }}">
     </div>
     <button class="botao botao-principal" type="submit">Buscar</button>
@@ -22,8 +19,8 @@
   </form>
   <form method="post" action="/historico/reconstruir" style="margin-top:14px">
     <button class="botao botao-pequeno" type="submit"
-            title="Revarre a pasta de notas e refaz este índice">
-      Reconstruir a partir dos arquivos
+            title="Use se alguma nota não aparecer aqui: o app relê a pasta de notas">
+      Atualizar a lista a partir da pasta de notas
     </button>
   </form>
 </div>
@@ -32,28 +29,34 @@
 <div class="rolagem">
   <table>
     <thead>
-      <tr><th>Emissão</th><th>Cliente</th><th>CNPJ/CPF</th>
-          <th class="numerico">Valor</th><th>Chave de acesso</th><th>Arquivos</th></tr>
+      <tr><th>Nº da nota</th><th>Cliente</th><th>Competência</th>
+          <th class="numerico">Valor</th><th>Emitida em</th><th></th></tr>
     </thead>
     <tbody>
       {% for nota in notas %}
       <tr>
-        <td class="discreto">{{ nota.emitida_em[:16].replace('T', ' ') if nota.emitida_em else '—' }}</td>
-        <td>{{ nota.tomador or '—' }}</td>
-        <td class="mono">{{ nota.documento or '—' }}</td>
-        <td class="numerico">{{ nota.valor_servico | moeda }}</td>
-        <td class="mono" style="word-break:break-all">{{ nota.chave_acesso or '—' }}</td>
+        <td title="Chave de acesso: {{ nota.chave_acesso }}">
+          <strong>{{ nota.n_nfse or '—' }}</strong>
+          {% if nota.ambiente and nota.ambiente != 'producao' %}<span class="etiqueta etiqueta-neutra">teste</span>{% endif %}
+        </td>
+        <td>
+          {% if nota.documento %}<a href="/clientes/editar/{{ nota.documento }}#notas">{{ nota.tomador or '—' }}</a>
+          {% else %}{{ nota.tomador or '—' }}{% endif %}
+          {% if nota.documento %}<br><span class="discreto">{{ nota.documento | documento }}</span>{% endif %}
+        </td>
+        <td>{{ nota.competencia | competencia }}</td>
+        <td class="numerico">R$ {{ nota.valor_servico | moeda }}</td>
+        <td class="discreto">{{ nota.emitida_em | data(true) }}</td>
         <td>
           {% if nota.chave_acesso %}
             <a class="botao botao-pequeno" href="/danfse/{{ nota.chave_acesso }}" target="_blank"
-               title="Abre o PDF; se ainda não existir, gera a partir do XML">PDF</a>
+               title="Abre o PDF da nota (para conferir, imprimir ou salvar)">PDF</a>
             <button class="botao botao-pequeno" type="button"
                     data-testar="/historico/reenviar/{{ nota.chave_acesso }}"
                     data-saida="reenvio-{{ loop.index }}" data-aguarde="Enviando..."
                     title="Manda o PDF e o XML para o e-mail do cliente">Reenviar e-mail</button>
             <span id="reenvio-{{ loop.index }}" class="discreto"></span>
           {% endif %}
-          <span class="discreto mono" style="word-break:break-all">{{ nota.pasta }}</span>
         </td>
       </tr>
       {% endfor %}

@@ -11,23 +11,22 @@
        principal contra emitir em produção achando que é teste. -->
   <div class="faixa {{ 'faixa-producao' if producao else 'faixa-homologacao' }}">
     {% if producao %}
-      <strong>PRODUÇÃO</strong> — as notas emitidas aqui têm valor fiscal real.
+      <strong>MODO REAL</strong> — as notas emitidas aqui têm valor fiscal.
     {% else %}
-      <strong>HOMOLOGAÇÃO</strong> — ambiente de teste. As notas não têm valor fiscal.
+      <strong>MODO TESTE</strong> — as notas emitidas aqui não têm valor fiscal.
     {% endif %}
   </div>
 
   <header class="cabecalho">
     <div class="marca">Emissor de NFS-e <span class="marca-sub">Nacional</span></div>
+    {% set telas_emitir = ['avulsa', 'importar', 'emitir', 'recorrencias'] %}
     <nav>
-      <a href="/" class="{{ 'ativo' if pagina_atual == 'painel' }}">Painel</a>
-      <a href="/importar" class="{{ 'ativo' if pagina_atual == 'importar' }}">Importar planilha</a>
-      <a href="/emitir" class="{{ 'ativo' if pagina_atual == 'emitir' }}">Emitir</a>
-      <a href="/avulsa" class="{{ 'ativo' if pagina_atual == 'avulsa' }}">Nota avulsa</a>
+      <a href="/" class="{{ 'ativo' if pagina_atual == 'painel' }}">Início</a>
+      <a href="/avulsa" class="{{ 'ativo' if pagina_atual in telas_emitir }}">Emitir nota
+        {% if pendentes_mensais %}<span class="contador contador-alerta">{{ pendentes_mensais }}</span>{% endif %}</a>
       <a href="/recibos" class="{{ 'ativo' if pagina_atual == 'recibos' }}">Recibos</a>
-      <a href="/recorrencias" class="{{ 'ativo' if pagina_atual == 'recorrencias' }}">Recorrências</a>
       <a href="/clientes" class="{{ 'ativo' if pagina_atual == 'clientes' }}">Clientes</a>
-      <a href="/historico" class="{{ 'ativo' if pagina_atual == 'historico' }}">Histórico</a>
+      <a href="/historico" class="{{ 'ativo' if pagina_atual == 'historico' }}">Notas emitidas</a>
       <a href="/configuracao" class="{{ 'ativo' if pagina_atual == 'configuracao' }}">Configuração</a>
     </nav>
   </header>
@@ -40,6 +39,7 @@
         <a class="botao botao-pequeno" href="/configuracao">Completar configuração</a>
       </div>
     {% endif %}
+    {% if pagina_atual in telas_emitir %}{% include "_abas_emitir.html" %}{% endif %}
     {% block conteudo %}{% endblock %}
   </main>
 

@@ -85,6 +85,43 @@
     window.addEventListener("resize", fechar);
   })();
 
+  /* ---- Abas dentro da página (ficha do cliente) ----
+     [data-abas] tem botões [data-aba="x"]; cada painel é [data-painel="x"].
+     [data-so-com-abas="a b"] só aparece nessas abas (ex.: o botão Salvar).
+     A aba fica no endereço (#notas), para voltar nela ao recarregar. */
+  (function montarAbas() {
+    var barra = document.querySelector("[data-abas]");
+    if (!barra) return;
+    var botoes = barra.querySelectorAll("[data-aba]");
+    var paineis = document.querySelectorAll("[data-painel]");
+
+    function ativar(nome, guardar) {
+      var existe = Array.prototype.some.call(botoes, function (b) { return b.getAttribute("data-aba") === nome; });
+      if (!existe) nome = botoes[0].getAttribute("data-aba");
+      botoes.forEach(function (b) {
+        var ativa = b.getAttribute("data-aba") === nome;
+        b.classList.toggle("ativa", ativa);
+        b.setAttribute("aria-selected", ativa ? "true" : "false");
+      });
+      paineis.forEach(function (p) { p.hidden = p.getAttribute("data-painel") !== nome; });
+      document.querySelectorAll("[data-so-com-abas]").forEach(function (el) {
+        el.hidden = el.getAttribute("data-so-com-abas").split(" ").indexOf(nome) < 0;
+      });
+      if (guardar) history.replaceState(null, "", "#" + nome);
+    }
+
+    botoes.forEach(function (b) {
+      b.addEventListener("click", function () { ativar(b.getAttribute("data-aba"), true); });
+    });
+    /* Campo obrigatório vazio numa aba escondida: o navegador não consegue
+       mostrar o aviso. Abre a aba dele primeiro. */
+    document.addEventListener("invalid", function (e) {
+      var painel = e.target.closest && e.target.closest("[data-painel]");
+      if (painel && painel.hidden) ativar(painel.getAttribute("data-painel"), true);
+    }, true);
+    ativar(location.hash.replace("#", ""), false);
+  })();
+
   /* ---- Botões de teste da tela de configuração ---- */
   document.querySelectorAll("[data-testar]").forEach(function (botao) {
     botao.addEventListener("click", function () {

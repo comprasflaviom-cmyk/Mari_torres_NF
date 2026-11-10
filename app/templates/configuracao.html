@@ -36,14 +36,14 @@
         <label for="ambiente">Ambiente de emissão</label>
         <select id="ambiente" name="ambiente">
           <option value="homologacao" {{ 'selected' if config.ambiente == 'homologacao' }}>
-            Homologação — teste, sem valor fiscal
+            Modo teste (homologação) — notas sem valor fiscal
           </option>
           <option value="producao" {{ 'selected' if config.ambiente == 'producao' }}>
-            Produção — notas com valor fiscal real
+            Modo real (produção) — notas com valor fiscal
           </option>
         </select>
         <span class="dica">
-          Só mude para produção depois de validar um lote completo em homologação.
+          Só passe para o modo real depois de testar algumas notas no modo teste.
         </span>
       </div>
     </div>
@@ -85,7 +85,7 @@
       <span id="resultado-certificado" class="discreto"></span>
       <button class="botao" type="button" data-testar="/configuracao/testar-conexao"
               data-saida="resultado-conexao">
-        Testar conexão com a Sefin
+        Testar conexão com a Receita
       </button>
       <span id="resultado-conexao" class="discreto"></span>
     </div>
@@ -166,12 +166,12 @@
     <h2 style="margin-top:0">Serviço prestado</h2>
     <div class="grade">
       <div class="campo">
-        <label for="servico_ctribnac">Código de tributação nacional (cTribNac)</label>
+        <label for="servico_ctribnac">Código do serviço (tributação nacional)</label>
         <input type="text" id="servico_ctribnac" name="servico_ctribnac" value="{{ config.servico_ctribnac }}">
         <span class="dica">São 6 dígitos: 4 do subitem da LC 116 + 2 do desdobro. Ex.: 1701 (consultoria/assessoria) + 00 = <span class="mono">170100</span>. Se o município não usa aquele desdobro, a nota volta com <span class="mono">E0312</span> — confira o código com o contador, ou numa nota que a empresa já emitiu.</span>
       </div>
       <div class="campo">
-        <label for="servico_ctribmun">Código complementar municipal (cTribMun)</label>
+        <label for="servico_ctribmun">Código complementar da prefeitura</label>
         <input type="text" id="servico_ctribmun" name="servico_ctribmun" value="{{ config.servico_ctribmun }}"
                placeholder="ex.: 001">
         <span class="dica">É o "Código Complementar Municipal" do portal nacional. Lá aparece com 9 dígitos (ex.: <span class="mono">17.03.03.001</span>); pode colar assim que o app guarda só os 3 últimos (<span class="mono">001</span>). O Rio exige este campo — sem ele a nota volta com <span class="mono">E0312</span>.</span>
@@ -209,7 +209,7 @@
         <input type="text" id="servico_ptottribsn" name="servico_ptottribsn"
                value="{{ config.servico_ptottribsn }}" placeholder="ex.: 8,63">
         <span class="dica"><strong>Atualize todo mês</strong> com o percentual que o contador
-          informa. Obrigatório para ME/EPP — sem ele a Sefin recusa a nota (<span class="mono">E0712</span>).</span>
+          informa. Obrigatório para ME/EPP — sem ele a Receita recusa a nota (<span class="mono">E0712</span>).</span>
       </div>
       <div class="campo">
         <label for="servico_ind_tot_trib">Totais aproximados de tributos</label>
@@ -226,13 +226,13 @@
     <h2 style="margin-top:0">Numeração e pastas</h2>
     <div class="grade">
       <div class="campo">
-        <label for="serie_dps">Série da DPS</label>
+        <label for="serie_dps">Série de numeração deste computador</label>
         <input type="text" id="serie_dps" name="serie_dps" value="{{ config.serie_dps }}">
         <span class="dica">
           <strong>Cada computador precisa de uma série diferente.</strong>
           Duas máquinas na mesma série geram numeração repetida. Use de
           <span class="mono">1</span> a <span class="mono">49999</span>: a
-          faixa 70000 é do emissor web do portal, e a Sefin recusa (E0010).
+          faixa 70000 é do emissor do portal gov.br, e a Receita recusa (E0010).
         </span>
       </div>
       <div class="campo">
@@ -286,7 +286,7 @@
       {% else %}
         Este computador é <span class="mono">{{ maquina }}</span> e usa a série
         <strong>{{ config.serie_dps }}</strong>. Com mais de um laptop emitindo,
-        dê uma série diferente a cada um — <code>nDPS</code> é único por série.
+        dê uma série diferente a cada um.
       {% endif %}
     </div>
   </div>
@@ -323,7 +323,7 @@
       <label for="email_enviar" style="font-weight:600">
         Enviar a nota por e-mail assim que for autorizada
         <span class="dica">
-          O cliente recebe o PDF (DANFSe) e o XML anexos. Em homologação o envio fica
+          O cliente recebe o PDF (DANFSe) e o XML anexos. No modo teste o envio fica
           bloqueado, a menos que você libere abaixo.
         </span>
       </label>
@@ -379,7 +379,7 @@
       <input type="checkbox" id="email_permitir_homologacao" name="email_permitir_homologacao"
              {{ 'checked' if config.email_permitir_homologacao }}>
       <label for="email_permitir_homologacao" style="font-weight:400">
-        Permitir envio em homologação
+        Permitir envio também no modo teste
         <span class="dica">Só marque junto com o redirecionamento acima.</span>
       </label>
     </div>

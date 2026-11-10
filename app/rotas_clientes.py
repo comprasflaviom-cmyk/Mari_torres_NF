@@ -70,7 +70,8 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
         cliente = repositorio_clientes().buscar(documento)
         if cliente is None:
             return RedirectResponse("/clientes", status_code=303)
-        return pagina(requisicao, "cliente_form.html", cliente=cliente, erro=None)
+        return pagina(requisicao, "cliente_form.html", cliente=cliente, erro=None,
+                      **_historico_do_cliente(cliente.documento))
 
     @app.post("/clientes", response_class=HTMLResponse)
     async def salvar_cliente(requisicao: Request):
@@ -90,7 +91,11 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
         try:
             repositorio_clientes().salvar(cliente)
         except ErroCadastro as exc:
-            return pagina(requisicao, "cliente_form.html", cliente=cliente, erro=str(exc))
+            # Cliente que já existe continua com cara de "editar" (e suas abas).
+            if existente := repositorio_clientes().buscar(cliente.documento):
+                cliente.criado_em = existente.criado_em
+            return pagina(requisicao, "cliente_form.html", cliente=cliente, erro=str(exc),
+                          **_historico_do_cliente(cliente.documento))
         return RedirectResponse("/clientes?salvo=true", status_code=303)
 
     @app.post("/clientes/chave/{documento}")
@@ -156,10 +161,11 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
     # Nota avulsa
     # ------------------------------------------------------------------
     @app.get("/avulsa", response_class=HTMLResponse)
-    def tela_avulsa(requisicao: Request):
+    def tela_avulsa(requisicao: Request, documento: str = ""):
         return pagina(
             requisicao, "avulsa.html",
             clientes=repositorio_clientes().listar(apenas_ativos=True),
+            selecionado=somente_digitos(documento),
             competencia_padrao=date.today().strftime("%Y-%m"),
             trabalho=ESTADO.trabalho.resumo(),
         )
@@ -245,6 +251,18 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
             return JSONResponse({"ok": False, "mensagem": str(exc)}, 409)
 
         return JSONResponse({"ok": True, "total": 1, "dry_run": dry_run})
+
+
+def _historico_do_cliente(documento: str) -> dict:
+    """Notas e recibos do cliente, para as abas da ficha."""
+    from .rotas_recibos import repositorio_recibos  # importe tardio: evita ciclo
+
+    if not somente_digitos(documento):
+        return {"notas": [], "recibos": []}
+    return {
+        "notas": repositorio_emissoes().listar(documento=documento),
+        "recibos": repositorio_recibos().listar(documento=documento),
+    }
 
 
 def _tomador_da_nota(formulario) -> tuple[Cliente | str, bool]:

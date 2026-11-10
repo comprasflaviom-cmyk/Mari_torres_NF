@@ -13,12 +13,12 @@
   <h2 style="margin-top:0">Serviço</h2>
   <div class="grade">
     <div class="campo">
-      <label for="servico_ctribnac">Código de tributação nacional</label>
+      <label for="servico_ctribnac">Código do serviço</label>
       <input type="text" id="servico_ctribnac" value="{{ config.servico_ctribnac }}">
       <span class="dica">Já vem o da Configuração. Troque só se esta nota for de outro serviço.</span>
     </div>
     <div class="campo">
-      <label for="servico_ctribmun">Código complementar municipal</label>
+      <label for="servico_ctribmun">Código complementar da prefeitura</label>
       <input type="text" id="servico_ctribmun" value="{{ config.servico_ctribmun }}" placeholder="ex.: 001">
     </div>
     <div class="campo">
@@ -39,7 +39,7 @@
   <div class="acoes">
     <button class="botao botao-principal" id="btn-simular-avulsa">Simular (não transmite)</button>
     <button class="botao {{ 'botao-perigo' if producao else '' }}" id="btn-emitir-avulsa">
-      {{ 'Emitir em PRODUÇÃO' if producao else 'Emitir em homologação' }}
+      {{ 'Emitir nota real' if producao else 'Emitir nota de teste' }}
     </button>
     <span class="discreto" id="situacao-avulsa"></span>
   </div>
@@ -54,7 +54,7 @@
 
 <div class="cortina" id="cortina" hidden>
   <div class="modal">
-    <h2>Emitir em produção</h2>
+    <h2>Emitir nota real</h2>
     <p>Esta nota terá <strong>valor fiscal real</strong>. Desfazer exige cancelamento formal.</p>
     <div class="resumo">
       <div><span>Cliente</span><strong id="modal-cliente">—</strong></div>

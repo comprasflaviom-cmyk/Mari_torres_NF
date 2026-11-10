@@ -20,8 +20,9 @@
       <option value="">Selecione...</option>
       {% for c in clientes %}
       <option value="{{ c.documento }}" data-email="{{ c.email }}"
-              data-recebe="{{ '1' if c.receber_por_email else '0' }}">
-        {{ c.razao_social }} — {{ c.documento }}
+              data-recebe="{{ '1' if c.receber_por_email else '0' }}"
+              {{ 'selected' if selecionado is defined and selecionado == c.documento }}>
+        {{ c.razao_social }} — {{ c.documento | documento }}
       </option>
       {% endfor %}
     </select>

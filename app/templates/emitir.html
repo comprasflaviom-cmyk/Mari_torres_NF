@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set pagina_atual = 'emitir' %}
 {% block conteudo %}
-<h1>Emitir notas</h1>
+<h1>Emitir pela planilha</h1>
 
 {% if clientes_novos %}
   <div class="aviso aviso-ok">
@@ -51,7 +51,7 @@
   <div class="acoes">
     <button class="botao botao-principal" id="btn-simular">Simular (não transmite)</button>
     <button class="botao {{ 'botao-perigo' if producao else '' }}" id="btn-emitir">
-      {{ 'Emitir em PRODUÇÃO' if producao else 'Emitir em homologação' }}
+      {{ 'Emitir nota real' if producao else 'Emitir nota de teste' }}
     </button>
     <span class="discreto" id="situacao-lote"></span>
   </div>
@@ -80,8 +80,8 @@
         <td><input type="checkbox" class="marca-linha" value="{{ l.numero_linha }}" checked></td>
         <td>{{ l.numero_linha }}</td>
         <td>{{ l.razao_social }}</td>
-        <td class="mono">{{ l.documento }}</td>
-        <td class="numerico">{{ l.valor | moeda }}</td>
+        <td class="mono">{{ l.documento | documento }}</td>
+        <td class="numerico">R$ {{ l.valor | moeda }}</td>
         <td class="resultado discreto">—</td>
       </tr>
       {% endfor %}
@@ -92,7 +92,7 @@
 <!-- Trava de produção: exige a frase digitada por extenso -->
 <div class="cortina" id="cortina" hidden>
   <div class="modal">
-    <h2>Emitir em produção</h2>
+    <h2>Emitir nota real</h2>
     <p>
       Estas notas terão <strong>valor fiscal real</strong>. Desfazer exige
       cancelamento formal, sujeito a prazo e à regra do município.

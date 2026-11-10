@@ -310,7 +310,7 @@ class ConfiguracaoApp:
             if percentual is None or not (0 <= percentual < 100):
                 faltando.append(
                     "Percentual do Simples Nacional (ex.: 8.63) — o contador informa "
-                    "todo mês; a Sefin exige para ME/EPP."
+                    "todo mês; sem ele a Receita recusa a nota."
                 )
         if self.iss_aliquota.strip():
             try:

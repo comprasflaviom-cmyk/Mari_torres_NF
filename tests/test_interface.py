@@ -1144,3 +1144,65 @@ def test_tela_abre_pdf_de_nota_renomeada(cliente, dados_app, config, linha):
     assert resposta.status_code == 200
     assert resposta.content[:4] == b"%PDF"
     assert "NFS-e 84" in resposta.headers["content-disposition"]
+
+
+# ---------------------------------------------------------------------------
+# Ficha do cliente, menu e formatos
+# ---------------------------------------------------------------------------
+def test_ficha_do_cliente_tem_abas_com_notas_e_recibos(cliente):
+    from app.rotas_clientes import repositorio_emissoes
+
+    _cadastrar(cliente)
+    repositorio_emissoes().registrar({
+        "chave_acesso": "CHAVE-FICHA", "documento_tomador": "11.222.333/0001-81",
+        "tomador": "Cliente Alfa", "valor_servico": "4500.00", "n_nfse": "84",
+        "competencia": "2026-09", "emitida_em": "2026-10-07T10:00:00", "ambiente": "producao",
+    })
+    _com_nome_da_empresa()
+    _recibo(cliente, tipo_tomador="cadastro", documento="11222333000181")
+
+    html = cliente.get("/clientes/editar/11222333000181").text
+    for aba in ("dados", "endereco", "mensal", "notas", "recibos"):
+        assert f'data-aba="{aba}"' in html
+    assert "11.222.333/0001-81" in html
+    assert "09/2026" in html and "R$ 4.500,00" in html
+    assert "/danfse/CHAVE-FICHA" in html
+    assert "/recibos/1/pdf" in html
+    assert "/avulsa?documento=11222333000181" in html
+
+
+def test_cliente_novo_so_tem_as_abas_de_cadastro(cliente):
+    html = cliente.get("/clientes/novo").text
+    assert 'data-aba="dados"' in html
+    assert 'data-aba="notas"' not in html
+
+
+def test_avulsa_ja_vem_com_o_cliente_escolhido(cliente):
+    _cadastrar(cliente)
+    html = cliente.get("/avulsa?documento=11222333000181").text
+    assert 'value="11222333000181"' in html
+    assert "selected" in html.split('value="11222333000181"')[1].split(">")[0]
+
+
+def test_menu_enxuto_e_aba_emitir(cliente):
+    html = cliente.get("/").text
+    menu = html.split("<nav>")[1].split("</nav>")[0]
+    for item in ("Início", "Emitir nota", "Recibos", "Clientes", "Notas emitidas", "Configuração"):
+        assert item in menu
+    assert "Histórico" not in menu and "Recorrências" not in menu
+    for tela in ("/avulsa", "/importar", "/emitir", "/recorrencias"):
+        pagina = cliente.get(tela).text
+        assert 'aria-label="Formas de emitir"' in pagina
+        assert 'class="ativo">Emitir nota' in pagina.replace("\n", "").replace("  ", "")
+
+
+def test_filtros_de_formato_brasileiro():
+    from app.servidor import _competencia_br, _data_br
+    from nfse.recibo import formatar_documento
+
+    assert formatar_documento("11222333000181") == "11.222.333/0001-81"
+    assert formatar_documento("52998224725") == "529.982.247-25"
+    assert _data_br("2026-10-07T14:03:00") == "07/10/2026"
+    assert _data_br("2026-10-07T14:03:00", True) == "07/10/2026 14:03"
+    assert _competencia_br("2026-09") == "09/2026"
+    assert _data_br("") == "—"

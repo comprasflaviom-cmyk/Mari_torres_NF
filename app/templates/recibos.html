@@ -62,11 +62,11 @@
       {% for r in recibos %}
       <tr>
         <td class="mono">{{ '%04d' % r.numero }}</td>
-        <td class="discreto">{{ r.data[8:10] }}/{{ r.data[5:7] }}/{{ r.data[:4] }}</td>
-        <td>{{ r.tomador }}</td>
-        <td class="numerico">{{ r.valor | moeda }}</td>
+        <td class="discreto">{{ r.data | data }}</td>
+        <td><a href="/clientes/editar/{{ r.documento }}#recibos">{{ r.tomador }}</a><br><span class="discreto">{{ r.documento | documento }}</span></td>
+        <td class="numerico">R$ {{ r.valor | moeda }}</td>
         <td class="discreto">
-          {% if r.enviado_em %}enviado em {{ r.enviado_em[8:10] }}/{{ r.enviado_em[5:7] }}{% else %}não enviado{% endif %}
+          {% if r.enviado_em %}enviado em {{ r.enviado_em | data }}{% else %}não enviado{% endif %}
         </td>
         <td>
           <a class="botao botao-pequeno" href="/recibos/{{ r.numero }}/pdf" target="_blank">PDF</a>

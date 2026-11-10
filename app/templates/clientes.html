@@ -2,11 +2,7 @@
 {% set pagina_atual = 'clientes' %}
 {% block conteudo %}
 <h1>Clientes</h1>
-<p class="subtitulo">
-  Duas chaves independentes por cliente:
-  <strong>Ativo</strong> decide se ele entra no faturamento;
-  <strong>Recebe por e-mail</strong> decide se a nota é enviada automaticamente para ele.
-</p>
+<p class="subtitulo">Clique no nome para ver a ficha: dados, endereço, nota mensal, notas e recibos.</p>
 
 {% if erro %}<div class="aviso aviso-erro">{{ erro }}</div>{% endif %}
 
@@ -51,10 +47,10 @@
       {% for c in clientes %}
       <tr data-documento="{{ c.documento }}" class="{{ '' if c.ativo else 'inativa' }}">
         <td>
-          <strong>{{ c.razao_social }}</strong>
+          <a href="/clientes/editar/{{ c.documento }}"><strong>{{ c.razao_social }}</strong></a>
           {% if c.cod_municipio %}<br><span class="discreto">{{ c.bairro }} — {{ c.uf }}</span>{% endif %}
         </td>
-        <td class="mono">{{ c.documento }}</td>
+        <td class="mono">{{ c.documento | documento }}</td>
         <td class="discreto">{{ c.email or '—' }}</td>
         <td>
           <button type="button" class="interruptor {{ 'ligado' if c.ativo }}"
@@ -70,7 +66,7 @@
             {{ 'Sim' if c.receber_por_email else 'Não' }}
           </button>
         </td>
-        <td><a class="botao botao-pequeno" href="/clientes/editar/{{ c.documento }}">Editar</a></td>
+        <td><a class="botao botao-pequeno" href="/clientes/editar/{{ c.documento }}">Abrir ficha</a></td>
       </tr>
       {% endfor %}
     </tbody>

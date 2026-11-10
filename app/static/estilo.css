@@ -121,7 +121,7 @@ th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--bor
 th { background: #eff2f5; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--tinta-suave); }
 tbody tr:last-child td { border-bottom: none; }
 tr.invalida { background: var(--erro-fraco); }
-td.numerico { text-align: right; font-variant-numeric: tabular-nums; }
+td.numerico, th.numerico { text-align: right; font-variant-numeric: tabular-nums; }
 
 .etiqueta { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 12px; font-weight: 600; }
 .etiqueta-ok      { background: var(--ok-fraco);      color: var(--ok); }
@@ -186,3 +186,26 @@ tr.inativa td:first-child strong { text-decoration: line-through; }
   font-size: 13px; font-weight: 400; line-height: 1.5;
   box-shadow: 0 6px 20px rgba(0,0,0,.18);
 }
+
+/* ---- Cabeçalho de página com ação principal à direita ---- */
+.cabecalho-pagina { display: flex; justify-content: space-between; align-items: flex-start;
+                    gap: 16px; flex-wrap: wrap; }
+.cabecalho-pagina .subtitulo { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ---- Abas ---- */
+.abas { display: flex; gap: 2px; border-bottom: 2px solid var(--borda); margin: 0 0 18px;
+        overflow-x: auto; }
+.aba { appearance: none; background: none; border: 0; border-bottom: 3px solid transparent;
+       margin-bottom: -2px; padding: 10px 16px; font: inherit; font-size: 14px;
+       color: var(--tinta-suave); cursor: pointer; white-space: nowrap; text-decoration: none; }
+.aba:hover { color: var(--tinta); }
+.aba.ativa { color: var(--realce); border-bottom-color: var(--realce); font-weight: 600; }
+.contador { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px;
+            border-radius: 10px; background: #e3e8ec; color: var(--tinta-suave);
+            font-size: 12px; font-weight: 600; text-align: center; }
+.aba.ativa .contador { background: var(--realce-fraco); color: var(--realce); }
+.contador-alerta { background: var(--atencao-fraco); color: var(--atencao); }
+
+/* Links dentro de tabelas: cor do app, sem o azul sublinhado do navegador. */
+table a:not(.botao) { color: var(--realce); text-decoration: none; font-weight: 600; }
+table a:not(.botao):hover { text-decoration: underline; }

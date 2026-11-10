@@ -1,0 +1,7 @@
+{# Sub-menu de "Emitir nota": as três formas de emitir, no topo de cada uma. #}
+<nav class="abas" aria-label="Formas de emitir">
+  <a class="aba {{ 'ativa' if pagina_atual == 'avulsa' }}" href="/avulsa">Nota avulsa</a>
+  <a class="aba {{ 'ativa' if pagina_atual in ['importar', 'emitir'] }}" href="/emitir">Pela planilha</a>
+  <a class="aba {{ 'ativa' if pagina_atual == 'recorrencias' }}" href="/recorrencias">Mensais
+    {% if pendentes_mensais %}<span class="contador contador-alerta">{{ pendentes_mensais }}</span>{% endif %}</a>
+</nav>

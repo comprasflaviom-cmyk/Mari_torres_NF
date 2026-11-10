@@ -43,12 +43,13 @@ def pendencias_recibo(config: ac.ConfiguracaoApp) -> list[str]:
 
 def registrar(app: FastAPI, pagina, config_tolerante) -> None:
     @app.get("/recibos", response_class=HTMLResponse)
-    def tela_recibos(requisicao: Request):
+    def tela_recibos(requisicao: Request, documento: str = ""):
         config = config_tolerante()
         return pagina(
             requisicao, "recibos.html",
             config=config,
             clientes=repositorio_clientes().listar(apenas_ativos=True),
+            selecionado="".join(c for c in documento if c.isdigit()),
             recibos=repositorio_recibos().listar(),
             hoje=date.today().isoformat(),
             faltando=pendencias_recibo(config),

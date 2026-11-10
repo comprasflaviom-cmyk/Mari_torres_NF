@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 {% set pagina_atual = 'painel' %}
 {% block conteudo %}
-<h1>Painel</h1>
+<h1>Início</h1>
 <p class="subtitulo">Situação do emissor antes de você começar a faturar.</p>
 
 <div class="cartoes">
   <div class="indicador">
-    <div class="rotulo">Ambiente</div>
-    <div class="valor">{{ 'Produção' if producao else 'Homologação' }}</div>
+    <div class="rotulo">Modo de emissão</div>
+    <div class="valor">{{ 'Modo real' if producao else 'Modo teste' }}</div>
     <div class="discreto">{{ 'Notas com valor fiscal real.' if producao else 'Notas de teste, sem valor fiscal.' }}</div>
   </div>
   <div class="indicador">
-    <div class="rotulo">Série da DPS</div>
+    <div class="rotulo">Série de numeração</div>
     <div class="valor">{{ config.serie_dps }}</div>
     <div class="discreto">Neste computador ({{ maquina }}).</div>
   </div>
@@ -122,12 +122,11 @@
 {% endif %}
 
 <div class="cartao">
-  <h2 style="margin-top:0">Antes de emitir em produção</h2>
+  <h2 style="margin-top:0">Primeira vez no modo real?</h2>
   <ul class="discreto" style="line-height:1.8">
-    <li>Valide o XML gerado pela <strong>simulação</strong> contra o schema oficial da NFS-e Nacional.</li>
-    <li>Confirme o código de tributação ({{ config.servico_ctribnac }}) e o regime tributário com o seu contador.</li>
-    <li>Rode um lote pequeno em homologação e confira o XML de retorno.</li>
-    <li>Garanta que a pasta de notas e o arquivo de controle de numeração estão sendo copiados para backup.</li>
+    <li>Emita uma nota de teste e confira o PDF antes de mudar para o modo real.</li>
+    <li>Confira com o contador o código do serviço ({{ config.servico_ctribnac }}) e o percentual do Simples do mês.</li>
+    <li>Deixe uma pasta de backup configurada: é ela que salva suas notas se o computador quebrar.</li>
   </ul>
 </div>
 {% endblock %}
