@@ -95,17 +95,17 @@ DADOS = {
 def test_homologacao_nao_envia_para_o_cliente_real():
     resultado = enviar_nfse(_config_email(), "homologacao", "cliente@real.com", DADOS, {})
     assert "homologação" in resultado
-    assert "não enviado" in resultado
+    assert "NÃO enviado" in resultado
 
 
 def test_email_desativado_nao_envia():
     resultado = enviar_nfse(_config_email(ativo=False), "producao", "cliente@real.com", DADOS, {})
-    assert "desativado" in resultado
+    assert "desligado" in resultado
 
 
 def test_sem_destinatario_nao_envia():
     resultado = enviar_nfse(_config_email(), "producao", "", DADOS, {})
-    assert "Email_Cliente vazia" in resultado
+    assert "sem e-mail" in resultado
 
 
 def test_envio_em_producao_anexa_pdf_e_xml(tmp_path, monkeypatch):

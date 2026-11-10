@@ -345,7 +345,7 @@ class Emissor:
         # Cliente marcado no cadastro para não receber: a nota já está emitida e
         # arquivada; só não sai e-mail.
         if not linha.enviar_email:
-            situacao = "e-mail não enviado: cliente marcado para não receber"
+            situacao = "e-mail NÃO enviado: cliente marcado no cadastro para não receber por e-mail"
             ao_progredir(EventoProgresso(tipo="detalhe", mensagem=situacao, **contexto))
             return situacao
         try:

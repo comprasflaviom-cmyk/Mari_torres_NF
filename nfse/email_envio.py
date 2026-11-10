@@ -122,16 +122,18 @@ def enviar_nfse(
     falha de emissão: a nota já está autorizada na Sefin.
     """
     if not config_email.ativo:
-        return "envio de e-mail desativado (EMAIL_ENVIAR=false)"
+        return ("e-mail NÃO enviado: o envio automático está desligado "
+                "(Configuração → \"Enviar a nota por e-mail assim que for autorizada\"). "
+                "Use Histórico → Reenviar e-mail")
 
     if ambiente != "producao" and not config_email.permitir_homologacao:
         return (
-            "e-mail não enviado: ambiente de homologação. "
-            "Defina EMAIL_PERMITIR_HOMOLOGACAO=true e EMAIL_TESTE_DESTINO para testar."
+            "e-mail NÃO enviado: nota de teste (homologação) não vai para o cliente"
         )
 
     if not destinatario:
-        return "e-mail não enviado: coluna Email_Cliente vazia nesta linha"
+        return ("e-mail NÃO enviado: cliente sem e-mail (na planilha ou no cadastro). "
+                "Cadastre o e-mail e use Histórico → Reenviar e-mail")
 
     config_email.validar()
 
