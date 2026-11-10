@@ -6,6 +6,7 @@ import base64
 import gzip
 import json
 
+import pytest
 
 from nfse.cliente import ClienteNFSe
 from nfse.email_envio import ConfiguracaoEmail, enviar_nfse
@@ -139,3 +140,78 @@ def test_destino_de_teste_protege_o_cliente(monkeypatch):
     )
     assert "redirecionado para eu@exemplo.com" in resultado
     assert enviadas[0]["To"] == "eu@exemplo.com"
+
+
+# ---------------------------------------------------------------------------
+# Entrega SMTP: porta/segurança e mensagens de erro
+# ---------------------------------------------------------------------------
+def _config_smtp(porta: int, starttls: bool):
+    return ConfiguracaoEmail(
+        ativo=True, servidor="smtp.exemplo.com.br", porta=porta, usuario="eu@x.com.br",
+        senha="s", remetente_email="eu@x.com.br", remetente_nome="", usar_starttls=starttls,
+        copia_oculta=[], destino_teste=None, permitir_homologacao=False,
+        assunto_modelo="", corpo_modelo="",
+    )
+
+
+class _SMTPFalso:
+    usados: list = []
+
+    def __init__(self, *a, **k):
+        _SMTPFalso.usados.append(type(self).__name__)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def ehlo(self):
+        pass
+
+    def starttls(self, context=None):
+        pass
+
+    def login(self, u, s):
+        pass
+
+    def send_message(self, m):
+        pass
+
+
+class SMTP(_SMTPFalso):
+    pass
+
+
+class SMTP_SSL(_SMTPFalso):
+    pass
+
+
+def test_porta_465_usa_ssl_direto_mesmo_com_starttls_marcado(monkeypatch):
+    from email.message import EmailMessage
+
+    from nfse import email_envio
+
+    _SMTPFalso.usados = []
+    monkeypatch.setattr(email_envio.smtplib, "SMTP", SMTP)
+    monkeypatch.setattr(email_envio.smtplib, "SMTP_SSL", SMTP_SSL)
+    email_envio._entregar(_config_smtp(465, True), EmailMessage(), "a@b.com")
+    email_envio._entregar(_config_smtp(587, True), EmailMessage(), "a@b.com")
+    assert _SMTPFalso.usados == ["SMTP_SSL", "SMTP"]
+
+
+def test_conexao_fechada_vira_explicacao(monkeypatch):
+    import smtplib
+    from email.message import EmailMessage
+
+    from nfse import email_envio
+
+    class Fecha(SMTP):
+        def starttls(self, context=None):
+            raise smtplib.SMTPServerDisconnected("Connection unexpectedly closed")
+
+    monkeypatch.setattr(email_envio.smtplib, "SMTP", Fecha)
+    with pytest.raises(email_envio.ErroEmail) as erro:
+        email_envio._entregar(_config_smtp(587, True), EmailMessage(), "a@b.com")
+    assert "fechou a conexão ao ativar a criptografia" in str(erro.value)
+    assert "porta" in str(erro.value)

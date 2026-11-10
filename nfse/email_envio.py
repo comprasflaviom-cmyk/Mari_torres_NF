@@ -213,27 +213,67 @@ def _montar_mensagem(
     return mensagem
 
 
+DICA_PORTA = (
+    "Confira em Configuração → Envio automático: servidor, porta e a caixa STARTTLS. "
+    "Porta 587 = STARTTLS marcado; porta 465 = SSL direto (o app ajusta sozinho)."
+)
+
+
+def usa_ssl_direto(config_email: ConfiguracaoEmail) -> bool:
+    """Porta 465 é sempre SSL direto: STARTTLS nela derruba a conexão sem
+    explicação ("Connection unexpectedly closed") — o erro mais comum de
+    configuração, então o app nem deixa acontecer."""
+    return config_email.porta == 465 or not config_email.usar_starttls
+
+
 def _entregar(config_email: ConfiguracaoEmail, mensagem: EmailMessage, destino: str) -> None:
     contexto = ssl.create_default_context()
+    servidor = f"{config_email.servidor}:{config_email.porta}"
+    etapa = "conectar ao servidor"
     try:
-        if config_email.usar_starttls:
-            with smtplib.SMTP(config_email.servidor, config_email.porta, timeout=30) as smtp:
+        if usa_ssl_direto(config_email):
+            smtp = smtplib.SMTP_SSL(config_email.servidor, config_email.porta, context=contexto, timeout=30)
+        else:
+            smtp = smtplib.SMTP(config_email.servidor, config_email.porta, timeout=30)
+        with smtp:
+            if not usa_ssl_direto(config_email):
+                etapa = "ativar a criptografia (STARTTLS)"
                 smtp.ehlo()
                 smtp.starttls(context=contexto)
-                smtp.login(config_email.usuario, config_email.senha)
-                smtp.send_message(mensagem)
-        else:
-            with smtplib.SMTP_SSL(
-                config_email.servidor, config_email.porta, context=contexto, timeout=30
-            ) as smtp:
-                smtp.login(config_email.usuario, config_email.senha)
-                smtp.send_message(mensagem)
+            etapa = "entrar com usuário e senha"
+            smtp.login(config_email.usuario, config_email.senha)
+            etapa = "enviar a mensagem"
+            smtp.send_message(mensagem)
     except smtplib.SMTPAuthenticationError as exc:
         raise ErroEmail(
-            "Autenticação SMTP recusada. No Gmail/Workspace use uma Senha de app, "
-            f"não a senha da conta. ({exc.smtp_code})"
+            "O servidor de e-mail recusou o usuário ou a senha. Confira o usuário (o e-mail "
+            "completo) e a senha. Gmail/Google Workspace exigem uma \"senha de app\", não a "
+            f"senha normal. (código {exc.smtp_code})"
+        ) from exc
+    except smtplib.SMTPServerDisconnected as exc:
+        raise ErroEmail(
+            f"O servidor {servidor} fechou a conexão ao {etapa}. Quase sempre é porta ou "
+            f"servidor errado. {DICA_PORTA}"
+        ) from exc
+    except smtplib.SMTPNotSupportedError as exc:
+        raise ErroEmail(
+            f"O servidor {servidor} não aceita STARTTLS nesta porta. Tente a porta 465. ({exc})"
+        ) from exc
+    except smtplib.SMTPRecipientsRefused as exc:
+        raise ErroEmail(f"O servidor recusou o destinatário {destino}. Confira o e-mail do cliente.") from exc
+    except smtplib.SMTPSenderRefused as exc:
+        raise ErroEmail(
+            "O servidor recusou o remetente. O \"E-mail remetente\" precisa ser o mesmo "
+            f"e-mail do usuário SMTP (ou um alias autorizado dele). ({exc.smtp_code})"
         ) from exc
     except smtplib.SMTPException as exc:
-        raise ErroEmail(f"Falha SMTP ao enviar para {destino}: {exc}") from exc
-    except OSError as exc:
-        raise ErroEmail(f"Falha de rede ao conectar em {config_email.servidor}: {exc}") from exc
+        raise ErroEmail(f"O servidor {servidor} recusou ao {etapa}: {exc}") from exc
+    except ssl.SSLError as exc:
+        raise ErroEmail(
+            f"Falha de segurança (SSL) com {servidor} ao {etapa}. {DICA_PORTA} ({exc.reason})"
+        ) from exc
+    except (TimeoutError, OSError) as exc:
+        raise ErroEmail(
+            f"Não foi possível {etapa} em {servidor}: o servidor não respondeu. Confira o nome "
+            f"do servidor e a porta, e se a internet está funcionando. ({exc})"
+        ) from exc

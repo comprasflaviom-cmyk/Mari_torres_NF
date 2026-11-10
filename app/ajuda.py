@@ -115,7 +115,7 @@ AJUDA: dict[str, str] = {
         "Endereço do servidor de envio do seu e-mail. Gmail: smtp.gmail.com. "
         "Outlook/Hotmail: smtp-mail.outlook.com. Outros: peça ao provedor."
     ),
-    "email_smtp_porta": "Normalmente 587. Alguns provedores usam 465.",
+    "email_smtp_porta": "587 (com STARTTLS marcado) ou 465 (o app usa SSL direto sozinho). Use a que o provedor do e-mail indicar.",
     "email_smtp_usuario": "O seu endereço de e-mail completo, o mesmo do login.",
     "senha_smtp": (
         "A senha do e-mail. No Gmail é uma \"senha de app\" (16 letras), criada em "
@@ -128,7 +128,7 @@ AJUDA: dict[str, str] = {
         "Para testes: todos os e-mails vão para este endereço em vez do cliente. "
         "Deixe em branco no uso normal."
     ),
-    "email_smtp_starttls": "Deixe marcado com a porta 587. Desmarque só se usar a porta 465.",
+    "email_smtp_starttls": "Deixe marcado com a porta 587. Na porta 465 tanto faz: o app usa SSL direto automaticamente.",
     "email_permitir_homologacao": (
         "Permite mandar e-mail também das notas de teste, para ver como chega. Use junto com "
         "\"Redirecionar todos os e-mails\", senão a nota de teste chega ao cliente."
