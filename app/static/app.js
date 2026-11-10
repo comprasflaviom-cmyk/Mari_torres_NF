@@ -186,6 +186,8 @@
     botao.addEventListener("click", function () {
       var destino = botao.getAttribute("data-testar");
       var saida = document.getElementById(botao.getAttribute("data-saida"));
+      var pergunta = botao.getAttribute("data-confirmar");
+      if (pergunta && !window.confirm(pergunta)) return;
       botao.disabled = true;
       saida.textContent = botao.getAttribute("data-aguarde") || "Testando...";
       saida.className = "discreto";
@@ -194,6 +196,12 @@
          ter salvo ainda — não faz sentido obrigar "Salvar" só para poder
          conferir o arquivo escolhido. */
       var dados = new FormData();
+      /* data-campos="nome=id_do_campo,...": manda junto o valor desses campos da tela. */
+      (botao.getAttribute("data-campos") || "").split(",").forEach(function (par) {
+        var partes = par.split("=");
+        var campo = partes.length === 2 && document.getElementById(partes[1].trim());
+        if (campo) dados.append(partes[0].trim(), campo.value);
+      });
       if (destino.indexOf("certificado") >= 0) {
         var campoArquivo = document.getElementById("certificado_arquivo");
         var campoSenha = document.getElementById("senha_certificado");

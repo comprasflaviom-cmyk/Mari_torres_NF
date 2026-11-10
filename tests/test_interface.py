@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import json
 from pathlib import Path
 
 import keyring
@@ -1099,7 +1100,7 @@ def test_recibo_gera_pdf_com_numeracao_propria(cliente, dados_app):
     assert pdf.status_code == 200
     assert pdf.headers["content-type"] == "application/pdf"
     assert pdf.content[:4] == b"%PDF"
-    assert list((dados_app / "notas" / "recibos" / "2026").glob("Recibo 0001 - *.pdf"))
+    assert list((dados_app / "notas" / "recibos" / "2026").glob("Recibo 1-0001 - *.pdf"))
 
 
 def test_recibo_enviar_sem_email_configurado_explica(cliente):
@@ -1261,3 +1262,58 @@ def test_evento_de_nota_traz_o_numero_da_nfse():
                                                   registro=registro))
     assert dados["registro"]["n_nfse"] == "84"
     assert dados["registro"]["documento_tomador"] == "11222333000181"
+
+
+# ---------------------------------------------------------------------------
+# Compartilhamento entre computadores pela tela
+# ---------------------------------------------------------------------------
+def test_ligar_compartilhamento_pela_configuracao(cliente, dados_app):
+    from nfse import sincronizacao
+
+    pasta = dados_app / "Drive" / "Emissor"
+    pasta.mkdir(parents=True)
+    try:
+        resposta = cliente.post("/configuracao", headers={NOME_HEADER: TOKEN}, data={
+            "ambiente": "homologacao", "prestador_cnpj": "11222333000181", "serie_dps": "1",
+            "pasta_compartilhada": str(pasta), "mensais_neste_computador": "on",
+        }, follow_redirects=False)
+        assert resposta.status_code == 303
+        assert sincronizacao.ativo() is not None
+
+        _cadastrar(cliente)
+        resultado = cliente.post("/sincronizacao/agora", headers={NOME_HEADER: TOKEN}).json()
+        assert resultado["ok"] is True
+        assert (pasta / "computadores" / "serie-1" / "eventos.jsonl").read_text(encoding="utf-8")
+        assert (pasta / "computadores" / "serie-1" / "dados-backup.db").is_file()
+
+        html = cliente.get("/configuracao").text
+        assert "Compartilhamento ligado" in html
+        assert "Computador da série 1" in html          # backup disponível para restaurar
+    finally:
+        sincronizacao.desativar()
+
+
+def test_pdf_de_nota_emitida_em_outro_computador(cliente, dados_app, config, linha):
+    from app.rotas_clientes import repositorio_emissoes
+    from nfse import sincronizacao
+    from tests.conftest import CHAVE_EXEMPLO, montar_nfse_xml
+
+    pasta = dados_app / "Drive" / "Emissor"
+    copia = pasta / "notas" / "2026" / "09-setembro"
+    copia.mkdir(parents=True)
+    base = "NFS-e 84 - Cliente Alfa Tecnologia LTDA - 09-2026"
+    (copia / f"{base}.xml").write_bytes(montar_nfse_xml(config, linha))
+    (copia / f"{base} - dados.json").write_text(json.dumps({
+        "chave_acesso": CHAVE_EXEMPLO, "arquivos": {"xml_nfse": "C:/outro/pc.xml"}}), encoding="utf-8")
+    configuracao = ac.carregar()
+    configuracao.pasta_compartilhada = str(pasta)
+    ac.salvar(configuracao)
+    # A nota chegou pela sincronização: está no histórico, mas não na pasta local.
+    repositorio_emissoes().registrar({"chave_acesso": CHAVE_EXEMPLO, "tomador": "Cliente Alfa"},
+                                     publicar=False)
+    try:
+        resposta = cliente.get(f"/danfse/{CHAVE_EXEMPLO}")
+        assert resposta.status_code == 200
+        assert resposta.content[:4] == b"%PDF"
+    finally:
+        sincronizacao.desativar()

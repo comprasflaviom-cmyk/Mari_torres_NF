@@ -24,6 +24,7 @@ from pathlib import Path
 import uvicorn
 
 from .recorrencias import iniciar_verificacao_periodica
+from .sincronia import iniciar_sincronizacao_periodica
 from .seguranca import Guardiao
 from .servidor import criar_app
 
@@ -60,6 +61,7 @@ def executar(abrir_navegador: bool = True, porta: int | None = None) -> None:
         # Espera o servidor subir antes de abrir a aba.
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
+    iniciar_sincronizacao_periodica()
     iniciar_verificacao_periodica()
     uvicorn.run(
         criar_app(guardiao),
@@ -94,6 +96,7 @@ def executar_com_bandeja(porta: int | None = None) -> None:
     servidor = uvicorn.Server(config)
     threading.Thread(target=servidor.run, daemon=True).start()
     threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    iniciar_sincronizacao_periodica()
     iniciar_verificacao_periodica()
 
     def abrir(icone=None, item=None) -> None:

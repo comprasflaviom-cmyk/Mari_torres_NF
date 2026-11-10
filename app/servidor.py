@@ -14,6 +14,7 @@ import os
 import re
 import secrets
 import shutil
+import sqlite3
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from pathlib import Path
@@ -40,6 +41,7 @@ from nfse.recibo import formatar_documento
 from nfse.armazenamento import (
     caminho_pdf_de, localizar_xml_da_nota, metadados_ao_lado, renomear_arquivos_antigos,
 )
+from nfse import sincronizacao
 from nfse.backup import Espelho
 from nfse.clientes import Cliente, ErroCadastro, completar_com_cadastro
 from nfse.estado import nome_da_maquina
@@ -48,6 +50,7 @@ from nfse.servico import OpcoesEmissao, montar_emissor
 from .recorrencias import registrar as registrar_rotas_recorrencias, repositorio_recorrencias
 from .rotas_recibos import registrar as registrar_rotas_recibos
 from .rotas_clientes import registrar as registrar_rotas_clientes, repositorio_clientes, repositorio_emissoes
+from . import sincronia
 from .ajuda import AJUDA
 from .seguranca import NOME_HEADER, Guardiao, gravar_cookie, montar_middleware
 from .sessao import ESTADO, LoteEmAndamento, importar_planilha
@@ -76,6 +79,10 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
     @asynccontextmanager
     async def ciclo_de_vida(_app):
         organizar_pasta_de_notas()
+        try:
+            sincronia.aplicar_configuracao(_carregar_config_tolerante())
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).exception("Falha ao ligar a sincronização")
         yield
 
     app = FastAPI(title="Emissor de NFS-e", docs_url=None, redoc_url=None, lifespan=ciclo_de_vida)
@@ -167,6 +174,7 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
             conflito_maquina=_conflito_de_maquina(config),
             pendentes_recorrencia=len(repositorio_recorrencias().listar_pendentes()),
             resumo=_resumo_do_mes(config),
+            sincronia=sincronia.situacao(),
         )
 
     # ------------------------------------------------------------------
@@ -183,6 +191,8 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
             tem_senha_smtp=bool(ac.ler_senha(ac.CHAVE_SENHA_SMTP)),
             maquina=nome_da_maquina(),
             conflito_maquina=_conflito_de_maquina(_carregar_config_tolerante()),
+            sincronia=sincronia.situacao(),
+            backups=sincronizacao.backups_disponiveis(),
         )
 
     @app.post("/configuracao")
@@ -236,6 +246,9 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         config.diretorio_notas = texto("diretorio_notas")
         config.diretorio_logs = texto("diretorio_logs")
         config.pasta_backup = texto("pasta_backup")
+        if "pasta_compartilhada" in formulario:
+            config.pasta_compartilhada = texto("pasta_compartilhada").strip('"')
+            config.mensais_neste_computador = marcado("mensais_neste_computador")
 
         config.email_enviar = marcado("email_enviar")
         config.email_smtp_servidor = texto("email_smtp_servidor", config.email_smtp_servidor)
@@ -273,6 +286,10 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         ]
 
         ac.salvar(config)
+        try:
+            sincronia.aplicar_configuracao(config)
+        except Exception:  # noqa: BLE001 — a configuração já está salva; a sincronia avisa na tela
+            logging.getLogger(__name__).exception("Falha ao ligar a sincronização")
         destino = "/configuracao?salvo=true"
         if so_na_sessao:
             destino += "&senha_volatil=" + ",".join(so_na_sessao)
@@ -619,6 +636,34 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         enviado = situacao.startswith(("e-mail enviado", "e-mail redirecionado"))
         return JSONResponse({"ok": enviado, "mensagem": situacao})
 
+    @app.post("/sincronizacao/agora")
+    def sincronizar_agora():
+        if not sincronizacao.ativo():
+            return JSONResponse({"ok": False, "mensagem": "Preencha a pasta compartilhada e salve primeiro."})
+        if not sincronizacao.ativo().disponivel():
+            return JSONResponse({"ok": False, "mensagem": (
+                "A pasta compartilhada não foi encontrada. Confira se o Google Drive está aberto "
+                "e sincronizado neste computador."
+            )})
+        resultado = sincronia.sincronizar_agora(forcar_backup=True)
+        return JSONResponse({"ok": True, "mensagem": (
+            f"Sincronizado: {resultado['enviados']} alteração(ões) enviada(s), "
+            f"{resultado['recebidos']} recebida(s). Backup do banco atualizado."
+        )})
+
+    @app.post("/sincronizacao/restaurar")
+    async def restaurar_backup(requisicao: Request):
+        formulario = await requisicao.form()
+        serie = str(formulario.get("serie", "")).strip()
+        try:
+            total = sincronia.restaurar(serie, _carregar_config_tolerante())
+        except (ValueError, OSError, sqlite3.Error) as exc:
+            return JSONResponse({"ok": False, "mensagem": f"Não foi possível restaurar: {exc}"})
+        return JSONResponse({"ok": True, "mensagem": (
+            f"Dados restaurados do computador da série {serie} ({total} alteração(ões) "
+            "posteriores aplicadas). Confira Clientes e Notas emitidas."
+        )})
+
     registrar_rotas_clientes(app, pagina, _carregar_config_tolerante)
     registrar_rotas_recorrencias(app, pagina, _carregar_config_tolerante)
     registrar_rotas_recibos(app, pagina, _carregar_config_tolerante)
@@ -837,7 +882,7 @@ def _mensagem_conflito(config, outra: str) -> str:
 
 
 def _situacao_backup(config: ac.ConfiguracaoApp) -> dict:
-    espelho = Espelho(config.para_configuracao().diretorio_backup)
+    espelho = Espelho(config.destino_backup(), serie=config.serie_dps)
     if not espelho.ativo:
         return {"ativo": False}
     ultimo = espelho.ultimo_backup()
@@ -874,6 +919,11 @@ def _arquivos_da_nota(chave: str) -> tuple[Path, Path]:
     registro = next((n for n in repositorio_emissoes().listar(busca=chave, limite=5)
                      if n.get("chave_acesso") == chave), None)
     xml = localizar_xml_da_nota(notas, chave, registro.get("arquivos") if registro else None)
+    if xml is None:
+        # Nota emitida em outro computador: a cópia está na pasta compartilhada.
+        espelho = _carregar_config_tolerante().destino_backup()
+        if espelho is not None and espelho.is_dir():
+            xml = localizar_xml_da_nota(espelho, chave)
     if xml is None:
         raise ErroNotaArquivada(f"O XML da NFS-e {chave} não está na pasta de notas ({notas}).", 404)
     pdf = caminho_pdf_de(xml)

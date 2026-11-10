@@ -7,6 +7,15 @@
   cadastrados em cada cliente — sem passar por planilha.
 </p>
 
+{% if not mensais_aqui %}
+  <div class="aviso aviso-info">
+    <strong>As notas mensais são emitidas pelo outro computador.</strong>
+    Aqui você acompanha o que está pendente e o que já saiu. Para este computador
+    passar a emitir, marque a opção em <a href="/configuracao#avancado">Configuração → Avançado</a>
+    (e desmarque no outro).
+  </div>
+{% endif %}
+
 {% if not pendentes %}
   <div class="cartao vazio">
     <p>Nenhuma pendência agora. Aparece aqui quando o dia de emissão de um cliente recorrente chegar.</p>
@@ -32,6 +41,7 @@
           </td>
           <td class="discreto">{{ p.descricao or 'sem descrição cadastrada' }}</td>
           <td>
+            {% if mensais_aqui %}
             <div class="acoes" style="margin:0; flex-wrap:nowrap">
               <button class="botao botao-pequeno {{ 'botao-perigo' if producao else '' }} botao-emitir-recorrencia"
                       type="button">
@@ -39,6 +49,7 @@
               </button>
               <button class="botao botao-pequeno botao-pular-recorrencia" type="button">Pular este mês</button>
             </div>
+            {% else %}<span class="etiqueta etiqueta-neutra">aguardando o outro computador</span>{% endif %}
             <span class="discreto situacao-recorrencia"></span>
           </td>
         </tr>

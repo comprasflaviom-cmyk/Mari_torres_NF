@@ -354,6 +354,36 @@ backup, e o aplicativo avisa em vermelho enquanto isso estiver desligado.
 Falha no backup **não invalida a nota**: ela já está autorizada e gravada
 localmente. Vira aviso no log.
 
+### Vários computadores: compartilhar pelo Google Drive (grátis)
+
+Cada computador continua com o seu banco local (rápido, funciona sem
+internet). Numa pasta do Google Drive, cada um escreve **só no seu próprio
+arquivo** de alterações e lê os dos outros — o Drive nunca precisa
+"misturar" um arquivo, então não há conflito nem banco corrompido.
+
+O que passa a ser compartilhado: clientes, notas emitidas (com o PDF),
+recibos e notas mensais. E o banco de cada computador ganha backup
+automático na pasta (a cada hora e ao abrir o app).
+
+**Como ligar**
+
+1. Em cada computador, instale o **Google Drive para desktop** e entre com a
+   conta do Workspace.
+2. Crie **uma** pasta para o app — de preferência um *Drive compartilhado*
+   chamado "Emissor NFS-e" — e dê acesso às pessoas que vão emitir.
+3. No Explorador de Arquivos, abra a pasta, clique na barra de endereço e
+   copie o caminho (ex.: `G:\Drives compartilhados\Emissor NFS-e`).
+4. No app, **Configuração → Avançado → Compartilhar entre computadores**:
+   cole o caminho e salve. Faça o mesmo nos outros computadores.
+5. Marque **"Este computador emite as notas mensais" em um só**.
+
+Cada computador precisa de uma **série diferente** (já era regra da
+numeração); os recibos passam a sair como `1-0001`, `2-0001`, sem repetir.
+
+**Computador novo ou formatado:** instale o app, use a mesma série de antes,
+aponte a pasta compartilhada e use **Restaurar dados de um backup** no mesmo
+lugar.
+
 ### Empacotar como instalador Windows
 
 Veja [`empacotamento/LEIA-ME.md`](empacotamento/LEIA-ME.md). Resumo:

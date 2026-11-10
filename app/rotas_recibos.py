@@ -7,6 +7,7 @@ numeração própria (tabela `recibos`) e fica em <pasta das notas>/recibos/AAAA
 
 from __future__ import annotations
 
+import shutil
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -15,6 +16,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from nfse import armazenamento_config as ac
+from nfse import sincronizacao
 from nfse.armazenamento import limpar_nome
 from nfse.clientes import BancoLocal, RepositorioRecibos
 from nfse.email_envio import ErroEmail, enviar_documento
@@ -30,6 +32,32 @@ def repositorio_recibos() -> RepositorioRecibos:
 def pasta_recibos(config: ac.ConfiguracaoApp, ano: int) -> Path:
     base = Path(config.diretorio_notas) if config.diretorio_notas else ac.diretorio_dados() / "notas"
     return base / "recibos" / str(ano)
+
+
+def _espelhar_recibo(arquivo: Path, data: str) -> None:
+    """Cópia na pasta compartilhada: o outro computador abre o PDF por lá."""
+    sinc = sincronizacao.ativo()
+    if sinc is None or not sinc.disponivel():
+        return
+    try:
+        destino = sincronizacao.caminho_recibo_espelhado(sinc.pasta, data, arquivo.name)
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(arquivo, destino)
+    except OSError:
+        pass   # o recibo está salvo aqui; a cópia é acessória
+
+
+def _arquivo_do_recibo(recibo: dict) -> Path | None:
+    """O PDF local ou, se foi gerado em outro computador, a cópia da pasta compartilhada."""
+    local = Path(recibo.get("arquivo") or "")
+    if recibo.get("arquivo") and local.is_file():
+        return local
+    sinc = sincronizacao.ativo()
+    if sinc and local.name:
+        espelhado = sincronizacao.caminho_recibo_espelhado(sinc.pasta, recibo.get("data") or "", local.name)
+        if espelhado.is_file():
+            return espelhado
+    return None
 
 
 def pendencias_recibo(config: ac.ConfiguracaoApp) -> list[str]:
@@ -88,9 +116,10 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
 
         repo = repositorio_recibos()
         numero = repo.criar(cliente.documento, cliente.razao_social, cliente.email,
-                            f"{valor:f}", descricao, dia.isoformat())
+                            f"{valor:f}", descricao, dia.isoformat(), serie=config.serie_dps)
+        rotulo = repo.buscar(numero)["rotulo"]
         pdf = gerar_recibo(DadosRecibo(
-            numero=numero, data=dia, valor=valor, descricao=descricao,
+            numero=rotulo, data=dia, valor=valor, descricao=descricao,
             tomador_nome=cliente.razao_social, tomador_documento=cliente.documento,
             prestador_nome=config.prestador_razao_social, prestador_documento=config.prestador_cnpj,
             prestador_endereco=config.prestador_endereco,
@@ -99,8 +128,9 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
         ))
         pasta = pasta_recibos(config, dia.year)
         pasta.mkdir(parents=True, exist_ok=True)
-        arquivo = pasta / f"Recibo {numero:04d} - {limpar_nome(cliente.razao_social)} - {dia:%m-%Y}.pdf"
+        arquivo = pasta / f"Recibo {rotulo} - {limpar_nome(cliente.razao_social)} - {dia:%m-%Y}.pdf"
         arquivo.write_bytes(pdf)
+        _espelhar_recibo(arquivo, dia.isoformat())
         repo.definir_arquivo(numero, str(arquivo))
 
         if salvar_novo and repositorio_clientes().buscar(cliente.documento) is None:
@@ -109,14 +139,14 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
         return JSONResponse({
             "ok": True, "numero": numero, "pdf": f"/recibos/{numero}/pdf",
             "email": cliente.email,
-            "mensagem": f"Recibo nº {numero:04d} gerado.",
+            "mensagem": f"Recibo nº {rotulo} gerado.",
         })
 
     @app.get("/recibos/{numero}/pdf")
     def abrir_pdf(numero: int):
         recibo = repositorio_recibos().buscar(numero)
-        arquivo = Path(recibo["arquivo"]) if recibo and recibo.get("arquivo") else None
-        if arquivo is None or not arquivo.exists():
+        arquivo = _arquivo_do_recibo(recibo) if recibo else None
+        if arquivo is None:
             return HTMLResponse("Recibo não encontrado na pasta. Ele pode ter sido apagado ou movido.", 404)
         return FileResponse(arquivo, media_type="application/pdf",
                             headers={"Content-Disposition": f'inline; filename="{arquivo.name}"'})
@@ -131,8 +161,8 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
                 "Este recibo não tem e-mail de destino. Abra o PDF e envie você mesmo, "
                 "ou gere de novo informando o e-mail do cliente."
             )}, 400)
-        arquivo = Path(recibo.get("arquivo") or "")
-        if not arquivo.is_file():
+        arquivo = _arquivo_do_recibo(recibo)
+        if arquivo is None:
             return JSONResponse({"ok": False, "mensagem": "O PDF deste recibo não está mais na pasta."}, 404)
 
         config = config_tolerante()
@@ -148,14 +178,14 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
         valor = moeda(Decimal(recibo["valor"]))
         corpo = (
             f"Olá, {recibo['tomador']}!\n\n"
-            f"Segue em anexo o recibo nº {numero:04d}, no valor de R$ {valor}, "
+            f"Segue em anexo o recibo nº {recibo['rotulo']}, no valor de R$ {valor}, "
             f"referente a {recibo['descricao'].rstrip('.')}.\n\n"
             "Qualquer dúvida, é só responder este e-mail.\n\n"
             f"Atenciosamente,\n{prestador}\n"
         )
         try:
             resultado = enviar_documento(
-                config_email, recibo["email"], f"Recibo nº {numero:04d} - {prestador}", corpo, arquivo,
+                config_email, recibo["email"], f"Recibo nº {recibo['rotulo']} - {prestador}", corpo, arquivo,
             )
         except ErroEmail as exc:
             return JSONResponse({"ok": False, "mensagem": f"Não foi possível enviar: {exc}"}, 502)

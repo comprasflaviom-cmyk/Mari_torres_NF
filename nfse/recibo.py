@@ -102,7 +102,7 @@ def data_por_extenso(dia: date) -> str:
 
 @dataclass
 class DadosRecibo:
-    numero: int
+    numero: int | str      # "1-0001" (série-número) ou só o número
     data: date
     valor: Decimal
     descricao: str
@@ -124,7 +124,8 @@ def gerar_recibo(d: DadosRecibo) -> bytes:
     f = _fontes()
     buffer = BytesIO()
     c = Canvas(buffer, pagesize=A4)
-    c.setTitle(f"Recibo {d.numero:04d} - {d.tomador_nome}")
+    rotulo = d.numero if isinstance(d.numero, str) else f"{d.numero:04d}"
+    c.setTitle(f"Recibo {rotulo} - {d.tomador_nome}")
     largura, altura = A4
     x0, x1 = 2 * cm, largura - 2 * cm
     topo, base = altura - 2 * cm, altura / 2 - 0.5 * cm
@@ -137,7 +138,7 @@ def gerar_recibo(d: DadosRecibo) -> bytes:
     c.setFont(f["titulo"], 22)
     c.drawString(x0 + 0.8 * cm, y, "RECIBO")
     c.setFont(f["titulo_normal"], 10)
-    c.drawString(x0 + 0.8 * cm, y - 0.6 * cm, f"Nº {d.numero:04d}")
+    c.drawString(x0 + 0.8 * cm, y - 0.6 * cm, f"Nº {rotulo}")
 
     # Caixa do valor, à direita.
     caixa_w, caixa_h = 5.6 * cm, 1.4 * cm

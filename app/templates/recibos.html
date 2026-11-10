@@ -61,7 +61,7 @@
     <tbody>
       {% for r in recibos %}
       <tr>
-        <td class="mono">{{ '%04d' % r.numero }}</td>
+        <td class="mono">{{ r.rotulo }}</td>
         <td class="discreto">{{ r.data | data }}</td>
         <td><a href="/clientes/editar/{{ r.documento }}#recibos">{{ r.tomador }}</a><br><span class="discreto">{{ r.documento | documento }}</span></td>
         <td class="numerico">R$ {{ r.valor | moeda }}</td>

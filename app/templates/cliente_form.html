@@ -235,7 +235,7 @@
       <tbody>
         {% for r in recibos %}
         <tr>
-          <td><strong>{{ '%04d' % r.numero }}</strong></td>
+          <td><strong>{{ r.rotulo }}</strong></td>
           <td>{{ r.data | data }}</td>
           <td class="numerico">R$ {{ r.valor | moeda }}</td>
           <td class="discreto">{{ ('enviado em ' ~ (r.enviado_em | data)) if r.enviado_em else 'não enviado' }}</td>

@@ -218,4 +218,14 @@ AJUDA: dict[str, str] = {
     "recibos:descricao": (
         "Complete a frase \"…referente a ____\". Ex.: consultoria estratégica prestada em setembro de 2026."
     ),
+    # ---------------- Compartilhar entre computadores ----------------
+    "pasta_compartilhada": (
+        "A mesma pasta do Google Drive em todos os computadores (ex.: um Drive compartilhado "
+        "\"Emissor NFS-e\"). Abra a pasta no Explorador de Arquivos, clique na barra de endereço "
+        "e copie o caminho. Precisa do Google Drive para desktop instalado."
+    ),
+    "mensais_neste_computador": (
+        "Só um computador deve emitir as notas mensais, senão a mesma nota pode sair duas vezes. "
+        "Marque aqui em um e deixe desmarcado nos outros."
+    ),
 }

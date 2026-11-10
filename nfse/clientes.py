@@ -28,6 +28,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from . import sincronizacao
 from .planilha import LinhaFaturamento, somente_digitos, validar_dv_cnpj, validar_dv_cpf
 
 ESQUEMA = """
@@ -93,7 +94,19 @@ CREATE TABLE IF NOT EXISTS recibos (
     data        TEXT NOT NULL,
     arquivo     TEXT DEFAULT '',
     enviado_em  TEXT DEFAULT '',
-    criado_em   TEXT NOT NULL
+    criado_em   TEXT NOT NULL,
+    serie       TEXT DEFAULT '',        -- computador que gerou (série da DPS)
+    numero_serie INTEGER DEFAULT 0      -- número dentro da série: "1-0001"
+);
+
+-- Compartilhamento entre computadores (nfse/sincronizacao.py).
+CREATE TABLE IF NOT EXISTS clientes_excluidos (
+    documento  TEXT PRIMARY KEY,
+    em         TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sync_estado (
+    chave  TEXT PRIMARY KEY,
+    valor  TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_emissoes_documento    ON emissoes(documento);
@@ -111,6 +124,11 @@ _COLUNAS_NOVAS_CLIENTES = {
 }
 
 
+_COLUNAS_NOVAS_RECIBOS = {
+    "serie": "TEXT DEFAULT ''",
+    "numero_serie": "INTEGER DEFAULT 0",
+}
+
 _COLUNAS_NOVAS_EMISSOES = {
     "n_nfse": "TEXT DEFAULT ''",
     "competencia": "TEXT DEFAULT ''",     # AAAA-MM
@@ -119,11 +137,17 @@ _COLUNAS_NOVAS_EMISSOES = {
 
 def _migrar_colunas_novas(conexao: sqlite3.Connection) -> None:
     for tabela, novas in (("clientes", _COLUNAS_NOVAS_CLIENTES),
-                          ("emissoes", _COLUNAS_NOVAS_EMISSOES)):
+                          ("emissoes", _COLUNAS_NOVAS_EMISSOES),
+                          ("recibos", _COLUNAS_NOVAS_RECIBOS)):
         existentes = {linha["name"] for linha in conexao.execute(f"PRAGMA table_info({tabela})")}
         for coluna, tipo in novas.items():
             if coluna not in existentes:
                 conexao.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
+    # Recibos de antes da numeração por série: o número antigo vira o da série.
+    conexao.execute("UPDATE recibos SET numero_serie = numero WHERE numero_serie IS NULL OR numero_serie = 0")
+    conexao.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_recibos_serie ON recibos(serie, numero_serie)"
+    )
 
 
 class ErroCadastro(ValueError):
@@ -260,6 +284,8 @@ class RepositorioClientes:
                 f"VALUES ({marcadores})",
                 valores,
             )
+            conexao.execute("DELETE FROM clientes_excluidos WHERE documento = ?", (cliente.documento,))
+        sincronizacao.publicar(self.banco.caminho, "cliente", valores)
         return cliente
 
     def buscar(self, documento: str) -> Cliente | None:
@@ -296,10 +322,23 @@ class RepositorioClientes:
                 f"UPDATE clientes SET {coluna} = ?, atualizado_em = ? WHERE documento = ?",
                 (int(valor), datetime.now().isoformat(timespec="seconds"), somente_digitos(documento)),
             )
+            linha = conexao.execute(
+                "SELECT * FROM clientes WHERE documento = ?", (somente_digitos(documento),)
+            ).fetchone()
+        if linha:
+            sincronizacao.publicar(self.banco.caminho, "cliente", dict(linha))
 
     def excluir(self, documento: str) -> None:
+        documento = somente_digitos(documento)
+        agora = datetime.now().isoformat(timespec="seconds")
         with self.banco._conectar() as conexao:
-            conexao.execute("DELETE FROM clientes WHERE documento = ?", (somente_digitos(documento),))
+            conexao.execute("DELETE FROM clientes WHERE documento = ?", (documento,))
+            # "Lápide": impede que um computador que ainda tem o cliente o traga de volta.
+            conexao.execute(
+                "INSERT OR REPLACE INTO clientes_excluidos (documento, em) VALUES (?, ?)",
+                (documento, agora),
+            )
+        sincronizacao.publicar(self.banco.caminho, "cliente_excluido", {"documento": documento, "em": agora})
 
     # -- Compartilhamento entre máquinas -----------------------------------
     def exportar(self) -> list[dict]:
@@ -344,25 +383,47 @@ def _linha_para_cliente(linha: sqlite3.Row) -> Cliente:
 # ---------------------------------------------------------------------------
 # Histórico (modelo de leitura)
 # ---------------------------------------------------------------------------
+def rotulo_recibo(serie: str, numero: int) -> str:
+    return f"{serie}-{int(numero):04d}" if serie else f"{int(numero):04d}"
+
+
+def _com_rotulo(recibo: dict) -> dict:
+    recibo["rotulo"] = rotulo_recibo(recibo.get("serie") or "", recibo.get("numero_serie") or recibo["numero"])
+    return recibo
+
+
 class RepositorioRecibos:
     def __init__(self, banco: BancoLocal):
         self.banco = banco
 
     def criar(self, documento: str, tomador: str, email: str, valor: str,
-              descricao: str, data: str) -> int:
-        """Reserva o próximo número. O PDF é gravado depois, com `definir_arquivo`."""
+              descricao: str, data: str, serie: str = "1") -> int:
+        """Reserva o próximo número da série. O PDF é gravado depois, com `definir_arquivo`.
+
+        Devolve o id local (usado nas rotas); o número que aparece no recibo é
+        `rotulo` ("1-0001"), único entre computadores porque a série é.
+        """
         with self.banco._conectar() as conexao:
+            # Recibos de antes da numeração por série são deste computador.
+            conexao.execute("UPDATE recibos SET serie = ? WHERE serie = '' OR serie IS NULL", (serie,))
+            proximo = conexao.execute(
+                "SELECT COALESCE(MAX(numero_serie), 0) + 1 FROM recibos WHERE serie = ?", (serie,)
+            ).fetchone()[0]
             cursor = conexao.execute(
-                """INSERT INTO recibos (documento, tomador, email, valor, descricao, data, criado_em)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO recibos (documento, tomador, email, valor, descricao, data, criado_em,
+                                        serie, numero_serie)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (documento, tomador, email, valor, descricao, data,
-                 datetime.now().isoformat(timespec="seconds")),
+                 datetime.now().isoformat(timespec="seconds"), serie, proximo),
             )
-            return int(cursor.lastrowid)
+            numero = int(cursor.lastrowid)
+        self._publicar(numero)
+        return numero
 
     def definir_arquivo(self, numero: int, arquivo: str) -> None:
         with self.banco._conectar() as conexao:
             conexao.execute("UPDATE recibos SET arquivo = ? WHERE numero = ?", (arquivo, numero))
+        self._publicar(numero)
 
     def marcar_enviado(self, numero: int, destino: str) -> None:
         with self.banco._conectar() as conexao:
@@ -370,11 +431,18 @@ class RepositorioRecibos:
                 "UPDATE recibos SET enviado_em = ?, email = ? WHERE numero = ?",
                 (datetime.now().isoformat(timespec="seconds"), destino, numero),
             )
+        self._publicar(numero)
+
+    def _publicar(self, numero: int) -> None:
+        with self.banco._conectar() as conexao:
+            linha = conexao.execute("SELECT * FROM recibos WHERE numero = ?", (numero,)).fetchone()
+        if linha:
+            sincronizacao.publicar(self.banco.caminho, "recibo", sincronizacao.carga("recibo", dict(linha)))
 
     def buscar(self, numero: int) -> dict | None:
         with self.banco._conectar() as conexao:
             linha = conexao.execute("SELECT * FROM recibos WHERE numero = ?", (numero,)).fetchone()
-        return dict(linha) if linha else None
+        return _com_rotulo(dict(linha)) if linha else None
 
     def listar(self, limite: int = 100, documento: str = "") -> list[dict]:
         consulta, parametros = "SELECT * FROM recibos", []
@@ -382,8 +450,8 @@ class RepositorioRecibos:
             consulta += " WHERE documento = ?"
             parametros.append(somente_digitos(documento))
         with self.banco._conectar() as conexao:
-            return [dict(l) for l in conexao.execute(
-                consulta + " ORDER BY numero DESC LIMIT ?", (*parametros, limite)
+            return [_com_rotulo(dict(l)) for l in conexao.execute(
+                consulta + " ORDER BY data DESC, numero DESC LIMIT ?", (*parametros, limite)
             )]
 
 
@@ -391,7 +459,7 @@ class RepositorioEmissoes:
     def __init__(self, banco: BancoLocal):
         self.banco = banco
 
-    def registrar(self, dados: dict) -> None:
+    def registrar(self, dados: dict, publicar: bool = True) -> None:
         """Grava depois que a nota já foi arquivada em disco."""
         if not dados.get("chave_acesso"):
             return
@@ -415,6 +483,11 @@ class RepositorioEmissoes:
                     dados.get("competencia", "") or "",
                 ),
             )
+            linha = conexao.execute(
+                "SELECT * FROM emissoes WHERE chave_acesso = ?", (dados.get("chave_acesso"),)
+            ).fetchone()
+        if publicar and linha:
+            sincronizacao.publicar(self.banco.caminho, "nota", sincronizacao.carga("nota", dict(linha)))
 
     def listar(self, busca: str = "", limite: int = 500, documento: str = "") -> list[dict]:
         consulta = "SELECT * FROM emissoes"
@@ -469,7 +542,7 @@ class RepositorioEmissoes:
                     dados["n_nfse"] = dados.get("n_nfse") or do_xml["numero"]
                     if not dados.get("competencia") and do_xml["competencia"]:
                         dados["competencia"] = do_xml["competencia"].strftime("%Y-%m")
-            self.registrar(dados)
+            self.registrar(dados, publicar=False)   # reindexação local, não é novidade
             total += 1
         return total
 
@@ -527,6 +600,8 @@ class RepositorioRecorrencias:
                 "SELECT * FROM recorrencias WHERE documento = ? AND competencia = ?",
                 (documento, competencia),
             ).fetchone()
+        if criada_agora:
+            self._publicar(linha["id"])
         return _linha_para_recorrencia(linha), criada_agora
 
     def listar_pendentes(self) -> list[Recorrencia]:
@@ -557,6 +632,7 @@ class RepositorioRecorrencias:
                 "UPDATE recorrencias SET valor = ?, atualizado_em = ? WHERE id = ?",
                 (valor, datetime.now().isoformat(timespec="seconds"), id_),
             )
+        self._publicar(id_)
 
     def marcar_emitida(self, id_: int, chave_acesso: str) -> None:
         with self.banco._conectar() as conexao:
@@ -565,6 +641,7 @@ class RepositorioRecorrencias:
                 "WHERE id = ?",
                 (chave_acesso, datetime.now().isoformat(timespec="seconds"), id_),
             )
+        self._publicar(id_)
 
     def marcar_pulada(self, id_: int) -> None:
         with self.banco._conectar() as conexao:
@@ -572,6 +649,14 @@ class RepositorioRecorrencias:
                 "UPDATE recorrencias SET estado = 'pulada', atualizado_em = ? WHERE id = ?",
                 (datetime.now().isoformat(timespec="seconds"), id_),
             )
+        self._publicar(id_)
+
+    def _publicar(self, id_: int) -> None:
+        with self.banco._conectar() as conexao:
+            linha = conexao.execute("SELECT * FROM recorrencias WHERE id = ?", (id_,)).fetchone()
+        if linha:
+            sincronizacao.publicar(self.banco.caminho, "recorrencia",
+                                   sincronizacao.carga("recorrencia", dict(linha)))
 
 
 def _linha_para_recorrencia(linha: sqlite3.Row) -> Recorrencia:

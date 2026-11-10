@@ -181,6 +181,10 @@ class ConfiguracaoApp:
     ultima_planilha: str = ""
     # Pasta de espelhamento: OneDrive, Drive ou unidade de rede servem.
     pasta_backup: str = ""
+    # Pasta do Google Drive compartilhada entre os computadores (nfse/sincronizacao.py).
+    pasta_compartilhada: str = ""
+    # Com mais de um computador, só um emite as notas mensais (evita nota em dobro).
+    mensais_neste_computador: bool = True
 
     # Numeração
     serie_dps: str = "1"
@@ -249,8 +253,16 @@ class ConfiguracaoApp:
             numero_dps_inicial=self.numero_dps_inicial,
             timeout_segundos=self.http_timeout,
             max_tentativas=self.http_max_tentativas,
-            diretorio_backup=Path(self.pasta_backup) if self.pasta_backup.strip() else None,
+            diretorio_backup=self.destino_backup(),
         )
+
+    def destino_backup(self) -> Path | None:
+        """Pasta de backup; sem ela, a pasta compartilhada serve (subpasta notas)."""
+        if self.pasta_backup.strip():
+            return Path(self.pasta_backup)
+        if self.pasta_compartilhada.strip():
+            return Path(self.pasta_compartilhada) / "notas"
+        return None
 
     def para_configuracao_email(self, senha_smtp: str | None = None) -> ConfiguracaoEmail:
         return ConfiguracaoEmail(

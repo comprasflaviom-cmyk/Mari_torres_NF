@@ -324,6 +324,83 @@
 
 <section data-painel="avancado">
   <div class="cartao">
+    <h2 style="margin-top:0">Compartilhar entre computadores (Google Drive)</h2>
+    <p class="discreto">
+      Com mais de um computador emitindo, aponte aqui a mesma pasta do Google Drive em
+      todos eles. Clientes, notas emitidas, recibos e notas mensais passam a aparecer em
+      todos, e o banco de dados ganha backup automático nessa pasta. Grátis: usa o Drive
+      do Google Workspace.
+    </p>
+    <div class="grade">
+      <div class="campo">
+        <label for="pasta_compartilhada">Pasta compartilhada</label>
+        <input type="text" id="pasta_compartilhada" name="pasta_compartilhada"
+               value="{{ config.pasta_compartilhada }}"
+               placeholder="ex.: G:\Drives compartilhados\Emissor NFS-e">
+        <span class="dica">Em branco = cada computador com os seus dados (como antes).</span>
+      </div>
+      <div class="campo">
+        <label>Notas mensais</label>
+        <div class="campo-caixa">
+          <input type="checkbox" id="mensais_neste_computador" name="mensais_neste_computador"
+                 {{ 'checked' if config.mensais_neste_computador }}>
+          <label for="mensais_neste_computador" style="font-weight:400">
+            Este computador emite as notas mensais
+            <span class="dica">Marque em <strong>um só</strong> computador. Os outros só acompanham.</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    {% if sincronia.ativa %}
+      <div class="aviso {{ 'aviso-info' if sincronia.disponivel else 'aviso-erro' }}" style="margin-top:16px">
+        {% if sincronia.disponivel %}
+          <strong>Compartilhamento ligado.</strong>
+          Este computador é a série {{ sincronia.serie }}.
+          Computadores na pasta: {{ sincronia.computadores | join(', ') or 'só este' }}.
+          Última sincronização: {{ sincronia.ultima_br or 'ainda não' }}.
+          Último backup do banco: {{ sincronia.ultimo_backup_br or 'ainda não' }}.
+          {% if sincronia.na_fila %}{{ sincronia.na_fila }} alteração(ões) esperando envio.{% endif %}
+        {% else %}
+          <strong>A pasta compartilhada não foi encontrada.</strong>
+          Confira se o Google Drive para desktop está aberto neste computador e se o caminho
+          está certo. Enquanto isso, as alterações ficam guardadas aqui e são enviadas depois.
+        {% endif %}
+      </div>
+      <div class="acoes">
+        <button class="botao" type="button" data-testar="/sincronizacao/agora"
+                data-saida="resultado-sincronia" data-aguarde="Sincronizando...">Sincronizar agora</button>
+        <span id="resultado-sincronia" class="discreto"></span>
+      </div>
+
+      {% if backups %}
+      <details class="detalhes-tecnicos" style="margin-top:16px">
+        <summary>Restaurar dados de um backup (computador novo ou formatado)</summary>
+        <p class="discreto">
+          Substitui os clientes, notas, recibos e notas mensais <strong>deste</strong> computador
+          pelos do backup escolhido. Use só ao reinstalar.
+        </p>
+        <div class="acoes">
+          <select id="serie_restaurar" style="width:auto">
+            {% for b in backups %}
+              <option value="{{ b.serie }}" {{ 'selected' if b.serie == config.serie_dps }}>
+                Computador da série {{ b.serie }} — backup de {{ b.em | data(true) }}
+              </option>
+            {% endfor %}
+          </select>
+          <button class="botao botao-perigo" type="button" data-testar="/sincronizacao/restaurar"
+                  data-campos="serie=serie_restaurar" data-saida="resultado-restaurar" data-aguarde="Restaurando..."
+                  data-confirmar="Substituir os dados deste computador pelos do backup escolhido?">
+            Restaurar
+          </button>
+          <span id="resultado-restaurar" class="discreto"></span>
+        </div>
+      </details>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <div class="cartao">
     <h2 style="margin-top:0">Numeração e pastas</h2>
     <div class="grade">
       <div class="campo">

@@ -27,6 +27,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from nfse import armazenamento_config as ac
+from nfse import sincronizacao
 from nfse.clientes import BancoLocal, Recorrencia, RepositorioRecorrencias
 from nfse.planilha import LinhaFaturamento
 from nfse.recorrencia import clientes_vencidos, competencia_de
@@ -46,6 +47,11 @@ def repositorio_recorrencias() -> RepositorioRecorrencias:
 # O verificador: cria pendências vencidas e, no modo automático, dispara a
 # emissão das que já têm valor.
 # ---------------------------------------------------------------------------
+def mensais_aqui(config: ac.ConfiguracaoApp) -> bool:
+    """Com a pasta compartilhada ligada, só o computador marcado emite as mensais."""
+    return sincronizacao.ativo() is None or config.mensais_neste_computador
+
+
 def verificar_pendencias(config: ac.ConfiguracaoApp) -> list[Recorrencia]:
     """Roda uma passada: cria a pendência do mês para quem venceu.
 
@@ -53,6 +59,8 @@ def verificar_pendencias(config: ac.ConfiguracaoApp) -> list[Recorrencia]:
     duplica nada (ver `RepositorioRecorrencias.criar_pendencia`). Devolve só
     as pendências criadas nesta chamada, para quem quiser avisar sobre elas.
     """
+    if not mensais_aqui(config):
+        return []   # outro computador cuida das mensais; aqui só se vê o resultado
     hoje = date.today()
     competencia = competencia_de(hoje)
     repo_clientes = repositorio_clientes()
@@ -162,12 +170,18 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
             requisicao, "recorrencias.html",
             pendentes=_para_tela(repo.listar_pendentes(), clientes_por_documento),
             recentes=_para_tela(recentes, clientes_por_documento),
+            mensais_aqui=mensais_aqui(config_tolerante()),
         )
 
     @app.post("/recorrencias/{id_}/emitir")
     async def emitir_recorrencia(requisicao: Request, id_: int):
         formulario = await requisicao.form()
         config = config_tolerante()
+        if not mensais_aqui(config):
+            return JSONResponse({"ok": False, "mensagem": (
+                "As notas mensais são emitidas pelo outro computador (Configuração → Avançado). "
+                "Assim a mesma nota não sai duas vezes."
+            )}, 409)
         if pendencias := config.pendencias():
             return JSONResponse(
                 {"ok": False, "mensagem": "Configuração incompleta: " + " ".join(pendencias)}, 400
@@ -214,6 +228,8 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
 
     @app.post("/recorrencias/{id_}/pular")
     def pular_recorrencia(id_: int):
+        if not mensais_aqui(config_tolerante()):
+            return JSONResponse({"ok": False, "mensagem": "As notas mensais são cuidadas pelo outro computador."}, 409)
         repositorio_recorrencias().marcar_pulada(id_)
         return JSONResponse({"ok": True})
 

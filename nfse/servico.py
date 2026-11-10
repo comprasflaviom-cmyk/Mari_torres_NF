@@ -415,5 +415,5 @@ def montar_emissor(
         certificado=certificado,
         cliente=cliente,
         controle=controle,
-        espelho=Espelho(config.diretorio_backup),
+        espelho=Espelho(config.diretorio_backup, serie=config.serie_dps),
     )

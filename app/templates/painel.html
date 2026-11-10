@@ -94,6 +94,19 @@
     </div>
   </div>
   <div class="indicador">
+    <div class="rotulo">Compartilhamento</div>
+    <div class="valor" style="font-size:19px">
+      {% if not sincronia.ativa %}Só neste computador
+      {% elif not sincronia.disponivel %}Pasta não encontrada
+      {% else %}Ligado{% endif %}
+    </div>
+    <div class="discreto">
+      {% if not sincronia.ativa %}<a href="/configuracao#avancado">Compartilhar pelo Google Drive</a>
+      {% elif not sincronia.disponivel %}Abra o Google Drive neste computador.
+      {% else %}Sincronizado {{ sincronia.ultima_br or 'agora' }}.{% endif %}
+    </div>
+  </div>
+  <div class="indicador">
     <div class="rotulo">Envio por e-mail</div>
     <div class="valor">{{ 'Ligado' if config.email_enviar else 'Desligado' }}</div>
     <div class="discreto">

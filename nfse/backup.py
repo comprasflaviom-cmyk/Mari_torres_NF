@@ -27,6 +27,13 @@ class Espelho:
     """Copia arquivos para a pasta de backup, preservando a estrutura."""
 
     destino: Path | None
+    # Com vários computadores na mesma pasta, cada um tem a sua marca de
+    # "último backup" — senão os dois escrevem no mesmo arquivo.
+    serie: str | None = None
+
+    @property
+    def marcador(self) -> str:
+        return f"ultimo-backup-serie{self.serie}.json" if self.serie else NOME_MARCADOR
 
     @property
     def ativo(self) -> bool:
@@ -62,7 +69,7 @@ class Espelho:
         if not self.ativo:
             return
         self.destino.mkdir(parents=True, exist_ok=True)
-        (self.destino / NOME_MARCADOR).write_text(
+        (self.destino / self.marcador).write_text(
             json.dumps(
                 {
                     "em": datetime.now().isoformat(timespec="seconds"),
@@ -76,7 +83,9 @@ class Espelho:
     def ultimo_backup(self) -> datetime | None:
         if not self.ativo:
             return None
-        marcador = self.destino / NOME_MARCADOR
+        marcador = self.destino / self.marcador
+        if not marcador.exists():
+            marcador = self.destino / NOME_MARCADOR      # marca antiga, de antes da série
         if not marcador.exists():
             return None
         try:
