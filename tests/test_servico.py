@@ -82,10 +82,13 @@ def test_nota_autorizada_arquiva_e_registra_numeracao(
 
     # Arquivos gravados na pasta do mês da competência.
     pasta = config.diretorio_notas / "2026" / "09-setembro"
-    assert (pasta / "CHAVE1_11222333000181_nfse.xml").exists()
+    # Nome legível: sem nNFSe no XML de teste, vale o número da DPS.
+    base = "DPS 1 - Cliente Alfa Tecnologia LTDA - 09-2026 (teste)"
+    assert (pasta / f"{base}.xml").exists()
     # DANFSe gerado localmente (a API de download da Sefin foi desligada).
-    assert (pasta / "CHAVE1_11222333000181_danfse.pdf").read_bytes()[:4] == b"%PDF"
-    assert (pasta / "CHAVE1_11222333000181_dps-assinada.xml").exists()
+    assert (pasta / f"{base}.pdf").read_bytes()[:4] == b"%PDF"
+    assert (pasta / f"{base} - dps-assinada.xml").exists()
+    assert (pasta / f"{base} - dados.json").exists()
 
     # A numeração foi consumida e persistida.
     assert emissor.controle.ultimo_numero == 1

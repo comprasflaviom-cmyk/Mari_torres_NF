@@ -35,6 +35,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen.canvas import Canvas
 
+from .armazenamento import caminho_pdf_de
+
 DADOS = Path(__file__).resolve().parent / "dados"
 URL_CONSULTA = "https://www.nfse.gov.br/ConsultaPublica/?tpc=1&chave="
 
@@ -765,9 +767,9 @@ def resumo_para_email(xml_nfse: bytes) -> tuple[str, dict[str, str]]:
 
 
 def gerar_danfse_do_arquivo(caminho_xml: Path) -> Path:
-    """Gera `*_danfse.pdf` ao lado de um `*_nfse.xml` já arquivado."""
+    """Gera o PDF ao lado de um XML de nota já arquivado (mesmo nome, .pdf)."""
     caminho_xml = Path(caminho_xml)
-    destino = caminho_xml.with_name(caminho_xml.name.replace("_nfse.xml", "_danfse.pdf"))
+    destino = caminho_pdf_de(caminho_xml)
     destino.write_bytes(gerar_danfse(caminho_xml.read_bytes()))
     return destino
 

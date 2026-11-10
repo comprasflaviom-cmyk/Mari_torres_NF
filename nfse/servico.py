@@ -289,6 +289,7 @@ class Emissor:
         arquivos = salvar_nota(
             self.config.diretorio_notas, opcoes.competencia,
             linha, resposta, xml_assinado, pdf,
+            numero_dps=str(numero_dps), ambiente=self.config.ambiente,
         )
         self.controle.registrar(impressao, numero_dps, resposta.chave_acesso)
         # Persiste a cada nota: uma queda no meio do lote não perde a numeração.

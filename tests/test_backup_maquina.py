@@ -204,7 +204,7 @@ def test_nota_autorizada_e_espelhada(config, linha, certificado_teste, tmp_path)
     assert registro.situacao == "AUTORIZADA"
     copiados = list((tmp_path / "backup").rglob("*"))
     nomes = {c.name for c in copiados if c.is_file()}
-    assert "CHAVE1_11222333000181_nfse.xml" in nomes
+    assert "DPS 1 - Cliente Alfa Tecnologia LTDA - 09-2026 (teste).xml" in nomes
     assert "controle_homologacao_serie1.json" in nomes, "o controle precisa ir junto"
 
 

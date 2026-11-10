@@ -9,10 +9,12 @@ linha de comando.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import secrets
 import shutil
+from contextlib import asynccontextmanager
 from datetime import date, datetime
 from pathlib import Path
 
@@ -25,6 +27,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from lxml import etree
 
 from nfse import armazenamento_config as ac
 from nfse.certificado import ErroCertificado, carregar_certificado, criar_sessao_mtls
@@ -33,6 +36,9 @@ from nfse.danfse import gerar_danfse_do_arquivo, resumo_para_email
 from nfse.estado import ControleEmissao
 from nfse.email_envio import ErroEmail, enviar_nfse
 from nfse.planilha import ErroPlanilha
+from nfse.armazenamento import (
+    caminho_pdf_de, localizar_xml_da_nota, metadados_ao_lado, renomear_arquivos_antigos,
+)
 from nfse.backup import Espelho
 from nfse.clientes import Cliente, ErroCadastro, completar_com_cadastro
 from nfse.estado import nome_da_maquina
@@ -66,7 +72,12 @@ CONFIRMACAO_PRODUCAO = "EMITIR EM PRODUCAO"
 
 def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
     guardiao = guardiao or Guardiao()
-    app = FastAPI(title="Emissor de NFS-e", docs_url=None, redoc_url=None)
+    @asynccontextmanager
+    async def ciclo_de_vida(_app):
+        organizar_pasta_de_notas()
+        yield
+
+    app = FastAPI(title="Emissor de NFS-e", docs_url=None, redoc_url=None, lifespan=ciclo_de_vida)
     app.state.guardiao = guardiao
 
     app.middleware("http")(montar_middleware(guardiao))
@@ -587,7 +598,8 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
         config = _carregar_config_tolerante()
         destino, dados = resumo_para_email(xml.read_bytes())
         if not destino:
-            cliente = repositorio_clientes().buscar(xml.name.split("_")[1])
+            # Sem e-mail na nota: o do cadastro, pelo CNPJ/CPF do tomador da própria nota.
+            cliente = repositorio_clientes().buscar(_documento_do_tomador(xml.read_bytes()))
             destino = cliente.email if cliente else ""
         if not destino:
             return JSONResponse({"ok": False, "mensagem": "Nem a nota nem o cadastro têm e-mail do cliente."})
@@ -791,16 +803,44 @@ def _arquivos_da_nota(chave: str) -> tuple[Path, Path]:
     if not re.fullmatch(r"[A-Za-z0-9-]{1,60}", chave):
         raise ErroNotaArquivada("Chave inválida.", 400)
     notas = Path(_carregar_config_tolerante().para_configuracao().diretorio_notas)
-    xmls = sorted(notas.rglob(f"{chave}_*_nfse.xml")) if notas.exists() else []
-    if not xmls:
+    registro = next((n for n in repositorio_emissoes().listar(busca=chave, limite=5)
+                     if n.get("chave_acesso") == chave), None)
+    xml = localizar_xml_da_nota(notas, chave, registro.get("arquivos") if registro else None)
+    if xml is None:
         raise ErroNotaArquivada(f"O XML da NFS-e {chave} não está na pasta de notas ({notas}).", 404)
-    pdf = xmls[0].with_name(xmls[0].name.replace("_nfse.xml", "_danfse.pdf"))
+    pdf = caminho_pdf_de(xml)
     if not pdf.exists():
         try:
-            gerar_danfse_do_arquivo(xmls[0])
+            gerar_danfse_do_arquivo(xml)
         except Exception as exc:  # noqa: BLE001 — mensagem na tela, não traceback
             raise ErroNotaArquivada(f"Não foi possível gerar o DANFSe: {exc}", 500) from exc
-    return xmls[0], pdf
+    return xml, pdf
+
+
+def organizar_pasta_de_notas() -> int:
+    """Na abertura: dá nome legível às notas antigas e refaz o índice delas.
+
+    Idempotente e barato quando não há nada a renomear. Nunca impede o app de
+    abrir — problema aqui vira linha no log.
+    """
+    try:
+        notas = Path(_carregar_config_tolerante().para_configuracao().diretorio_notas)
+        renomeadas = renomear_arquivos_antigos(notas)
+        if renomeadas:
+            repositorio_emissoes().reconstruir(notas)
+        return renomeadas
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).exception("Falha ao organizar a pasta de notas")
+        return 0
+
+
+def _documento_do_tomador(xml: bytes) -> str:
+    try:
+        raiz = etree.fromstring(xml)
+    except etree.XMLSyntaxError:
+        return ""
+    achados = raiz.xpath("//*[local-name()='toma']/*[local-name()='CNPJ' or local-name()='CPF']")
+    return (achados[0].text or "").strip() if achados else ""
 
 
 def _registrar_no_historico(ambiente: str):
@@ -809,16 +849,24 @@ def _registrar_no_historico(ambiente: str):
 
     def registrar(registro: dict) -> None:
         caminho = Path(registro.get("arquivo_xml") or "")
-        repo.registrar({
+        dados = {
             "chave_acesso": registro.get("chave_acesso"),
             "documento_tomador": registro.get("documento_tomador", ""),
             "tomador": registro.get("razao_social", ""),
             "valor_servico": registro.get("valor_servico", ""),
             "numero_dps": registro.get("numero_dps", ""),
             "emitida_em": datetime.now().isoformat(timespec="seconds"),
-            "ambiente": ambiente,
-            "pasta": str(caminho.parent) if caminho.name else "",
-            "arquivos": {"xml": registro.get("arquivo_xml", "")},
-        })
+            "arquivos": {"xml_nfse": str(caminho)} if caminho.name else {},
+        }
+        # Os metadados gravados ao lado da nota têm número, competência e caminhos.
+        meta = metadados_ao_lado(caminho) if caminho.name else None
+        if meta and meta.is_file():
+            try:
+                dados.update(json.loads(meta.read_text(encoding="utf-8")))
+            except (json.JSONDecodeError, OSError):
+                pass
+        dados["ambiente"] = ambiente
+        dados["pasta"] = str(caminho.parent) if caminho.name else ""
+        repo.registrar(dados)
 
     return registrar

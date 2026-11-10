@@ -15,6 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from nfse import armazenamento_config as ac
+from nfse.armazenamento import limpar_nome
 from nfse.clientes import BancoLocal, RepositorioRecibos
 from nfse.email_envio import ErroEmail, enviar_documento
 from nfse.recibo import DadosRecibo, gerar_recibo, moeda
@@ -97,7 +98,7 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
         ))
         pasta = pasta_recibos(config, dia.year)
         pasta.mkdir(parents=True, exist_ok=True)
-        arquivo = pasta / f"Recibo_{numero:04d}_{cliente.documento}.pdf"
+        arquivo = pasta / f"Recibo {numero:04d} - {limpar_nome(cliente.razao_social)} - {dia:%m-%Y}.pdf"
         arquivo.write_bytes(pdf)
         repo.definir_arquivo(numero, str(arquivo))
 

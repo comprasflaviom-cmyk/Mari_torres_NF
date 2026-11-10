@@ -1099,7 +1099,7 @@ def test_recibo_gera_pdf_com_numeracao_propria(cliente, dados_app):
     assert pdf.status_code == 200
     assert pdf.headers["content-type"] == "application/pdf"
     assert pdf.content[:4] == b"%PDF"
-    assert list((dados_app / "notas" / "recibos" / "2026").glob("Recibo_0001_*.pdf"))
+    assert list((dados_app / "notas" / "recibos" / "2026").glob("Recibo 0001 - *.pdf"))
 
 
 def test_recibo_enviar_sem_email_configurado_explica(cliente):
@@ -1128,3 +1128,19 @@ def test_recibo_enviar_por_email(cliente, monkeypatch):
     assert resposta.json()["ok"] is True
     assert enviados[0][0] == "cliente@alfa.com.br"
     assert "enviado em" in cliente.get("/recibos").text
+
+
+def test_tela_abre_pdf_de_nota_renomeada(cliente, dados_app, config, linha):
+    from app.servidor import organizar_pasta_de_notas
+    from tests.test_nomes_arquivos import _nota_antiga
+    from tests.conftest import CHAVE_EXEMPLO
+
+    pasta = dados_app / "notas" / "2026" / "09-setembro"
+    _nota_antiga(pasta, config, linha)
+    (pasta / f"{CHAVE_EXEMPLO}_11222333000181_danfse.pdf").unlink()   # força gerar
+    assert organizar_pasta_de_notas() == 1
+
+    resposta = cliente.get(f"/danfse/{CHAVE_EXEMPLO}")
+    assert resposta.status_code == 200
+    assert resposta.content[:4] == b"%PDF"
+    assert "NFS-e 84" in resposta.headers["content-disposition"]

@@ -111,11 +111,19 @@ _COLUNAS_NOVAS_CLIENTES = {
 }
 
 
+_COLUNAS_NOVAS_EMISSOES = {
+    "n_nfse": "TEXT DEFAULT ''",
+    "competencia": "TEXT DEFAULT ''",     # AAAA-MM
+}
+
+
 def _migrar_colunas_novas(conexao: sqlite3.Connection) -> None:
-    existentes = {linha["name"] for linha in conexao.execute("PRAGMA table_info(clientes)")}
-    for coluna, tipo in _COLUNAS_NOVAS_CLIENTES.items():
-        if coluna not in existentes:
-            conexao.execute(f"ALTER TABLE clientes ADD COLUMN {coluna} {tipo}")
+    for tabela, novas in (("clientes", _COLUNAS_NOVAS_CLIENTES),
+                          ("emissoes", _COLUNAS_NOVAS_EMISSOES)):
+        existentes = {linha["name"] for linha in conexao.execute(f"PRAGMA table_info({tabela})")}
+        for coluna, tipo in novas.items():
+            if coluna not in existentes:
+                conexao.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
 
 
 class ErroCadastro(ValueError):
@@ -366,10 +374,14 @@ class RepositorioRecibos:
             linha = conexao.execute("SELECT * FROM recibos WHERE numero = ?", (numero,)).fetchone()
         return dict(linha) if linha else None
 
-    def listar(self, limite: int = 100) -> list[dict]:
+    def listar(self, limite: int = 100, documento: str = "") -> list[dict]:
+        consulta, parametros = "SELECT * FROM recibos", []
+        if documento:
+            consulta += " WHERE documento = ?"
+            parametros.append(somente_digitos(documento))
         with self.banco._conectar() as conexao:
             return [dict(l) for l in conexao.execute(
-                "SELECT * FROM recibos ORDER BY numero DESC LIMIT ?", (limite,)
+                consulta + " ORDER BY numero DESC LIMIT ?", (*parametros, limite)
             )]
 
 
@@ -385,11 +397,11 @@ class RepositorioEmissoes:
             conexao.execute(
                 """INSERT OR REPLACE INTO emissoes
                    (chave_acesso, documento, tomador, valor_servico, numero_dps,
-                    emitida_em, ambiente, pasta, arquivos)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    emitida_em, ambiente, pasta, arquivos, n_nfse, competencia)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     dados.get("chave_acesso"),
-                    dados.get("documento_tomador", ""),
+                    somente_digitos(dados.get("documento_tomador", "") or ""),
                     dados.get("tomador", ""),
                     str(dados.get("valor_servico", "")),
                     str(dados.get("numero_dps", "")),
@@ -397,16 +409,22 @@ class RepositorioEmissoes:
                     dados.get("ambiente", ""),
                     dados.get("pasta", ""),
                     json.dumps(dados.get("arquivos", {}), ensure_ascii=False),
+                    str(dados.get("n_nfse", "") or ""),
+                    dados.get("competencia", "") or "",
                 ),
             )
 
-    def listar(self, busca: str = "", limite: int = 500) -> list[dict]:
+    def listar(self, busca: str = "", limite: int = 500, documento: str = "") -> list[dict]:
         consulta = "SELECT * FROM emissoes"
         parametros: list = []
-        if busca.strip():
-            consulta += " WHERE tomador LIKE ? OR documento LIKE ? OR chave_acesso LIKE ?"
+        if documento:
+            consulta += " WHERE documento = ?"
+            parametros = [somente_digitos(documento)]
+        elif busca.strip():
+            consulta += (" WHERE tomador LIKE ? OR documento LIKE ? OR chave_acesso LIKE ?"
+                         " OR n_nfse = ?")
             alvo = f"%{busca.strip()}%"
-            parametros = [alvo, alvo, alvo]
+            parametros = [alvo, f"%{somente_digitos(busca) or busca.strip()}%", alvo, busca.strip()]
         consulta += " ORDER BY emitida_em DESC LIMIT ?"
         parametros.append(limite)
 
@@ -419,11 +437,13 @@ class RepositorioEmissoes:
             return resultados
 
     def reconstruir(self, diretorio_notas: Path) -> int:
-        """Refaz a tabela varrendo os `*_retorno.json` da pasta de notas.
+        """Refaz a tabela varrendo os metadados da pasta de notas.
 
         Existe para provar que esta tabela é descartável: se ela se perder ou
         divergir, os arquivos em disco continuam sendo a verdade.
         """
+        from .armazenamento import arquivos_de_metadados, dados_do_xml, localizar_xml_da_nota
+
         diretorio_notas = Path(diretorio_notas)
         if not diretorio_notas.exists():
             return 0
@@ -432,12 +452,21 @@ class RepositorioEmissoes:
             conexao.execute("DELETE FROM emissoes")
 
         total = 0
-        for caminho in diretorio_notas.rglob("*_retorno.json"):
+        for caminho in arquivos_de_metadados(diretorio_notas):
             try:
                 dados = json.loads(caminho.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 continue
             dados["pasta"] = str(caminho.parent)
+            # Notas antigas não guardavam número nem competência: lê do XML.
+            if not dados.get("n_nfse") or not dados.get("competencia"):
+                xml = localizar_xml_da_nota(diretorio_notas, dados.get("chave_acesso") or "",
+                                            dados.get("arquivos"))
+                if xml:
+                    do_xml = dados_do_xml(xml.read_bytes())
+                    dados["n_nfse"] = dados.get("n_nfse") or do_xml["numero"]
+                    if not dados.get("competencia") and do_xml["competencia"]:
+                        dados["competencia"] = do_xml["competencia"].strftime("%Y-%m")
             self.registrar(dados)
             total += 1
         return total
