@@ -62,7 +62,7 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
         if faltando := pendencias_recibo(config):
             return JSONResponse({"ok": False, "mensagem": (
                 "Para o recibo sair com os dados da sua empresa, preencha em Configuração → "
-                "Prestador: " + " e ".join(faltando) + "."
+                "Empresa: " + " e ".join(faltando) + "."
             )}, 400)
 
         cliente, salvar_novo = _tomador_da_nota(formulario)
@@ -140,8 +140,8 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
         if not all((config_email.servidor, config_email.usuario, config_email.senha,
                     config_email.remetente_email)):
             return JSONResponse({"ok": False, "mensagem": (
-                "O e-mail ainda não está configurado. Preencha em Configuração → Envio automático "
-                "ao cliente: servidor, usuário, senha e e-mail remetente."
+                "O e-mail ainda não está configurado. Preencha em Configuração → E-mail: "
+                "servidor, usuário, senha e e-mail remetente."
             )}, 400)
 
         prestador = config.prestador_razao_social

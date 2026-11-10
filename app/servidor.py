@@ -166,6 +166,7 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
             maquina=nome_da_maquina(),
             conflito_maquina=_conflito_de_maquina(config),
             pendentes_recorrencia=len(repositorio_recorrencias().listar_pendentes()),
+            resumo=_resumo_do_mes(config),
         )
 
     # ------------------------------------------------------------------
@@ -634,6 +635,41 @@ def _moeda_br(valor) -> str:
     except (TypeError, ValueError):
         return str(valor or "")
     return f"{numero:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _resumo_do_mes(config: ac.ConfiguracaoApp) -> dict:
+    """Notas e recibos do mês corrente, para o Início. Nunca derruba a página."""
+    from .rotas_recibos import repositorio_recibos
+
+    mes = date.today().strftime("%Y-%m")
+
+    def total(itens, campo):
+        soma = 0.0
+        for item in itens:
+            try:
+                soma += float(str(item.get(campo) or 0))
+            except ValueError:
+                pass
+        return soma
+
+    try:
+        notas = [n for n in repositorio_emissoes().listar(limite=5000)
+                 if (n.get("emitida_em") or "").startswith(mes)
+                 and (n.get("ambiente") or "producao") == config.ambiente]
+        recibos = [r for r in repositorio_recibos().listar(limite=5000)
+                   if (r.get("data") or "").startswith(mes)]
+    except Exception:  # noqa: BLE001
+        notas, recibos = [], []
+    return {
+        "mes": f"{_MESES[date.today().month - 1]} de {date.today().year}",
+        "notas": len(notas), "total_notas": total(notas, "valor_servico"),
+        "recibos": len(recibos), "total_recibos": total(recibos, "valor"),
+        "ultimas": notas[:5],
+    }
+
+
+_MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
+          "agosto", "setembro", "outubro", "novembro", "dezembro"]
 
 
 def _modo(ambiente: str) -> str:

@@ -17,7 +17,7 @@ from datetime import date
 from pathlib import Path
 from typing import Callable, Iterable
 
-from .armazenamento import salvar_nota, salvar_rejeicao
+from .armazenamento import dados_do_xml, salvar_nota, salvar_rejeicao
 from .backup import Espelho, espelhar_nota
 from .assinatura import assinar_dps, empacotar_para_envio
 from .certificado import CertificadoA1, carregar_certificado, criar_sessao_mtls
@@ -298,6 +298,8 @@ class Emissor:
         registro.situacao = "AUTORIZADA"
         registro.chave_acesso = resposta.chave_acesso or ""
         registro.arquivo_xml = arquivos.get("xml_nfse", arquivos.get("xml_dps", ""))
+        if resposta.xml_nfse:
+            registro.n_nfse = dados_do_xml(resposta.xml_nfse)["numero"]
         registro.detalhe = "; ".join(resposta.mensagens)
 
         if resposta.mensagens:

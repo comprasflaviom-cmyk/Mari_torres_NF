@@ -209,3 +209,26 @@ tr.inativa td:first-child strong { text-decoration: line-through; }
 /* Links dentro de tabelas: cor do app, sem o azul sublinhado do navegador. */
 table a:not(.botao) { color: var(--realce); text-decoration: none; font-weight: 600; }
 table a:not(.botao):hover { text-decoration: underline; }
+
+/* ---- Resultado de cada nota ---- */
+.resultado-nota { display: flex; flex-direction: column; gap: 6px; }
+.resultado-nota .linha { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.resultado-nota .forte { font-weight: 700; }
+.aviso-texto { color: var(--atencao); font-size: 13px; }
+#resultado-avulsa { margin: 12px 0 4px; font-size: 15px; }
+.detalhes-tecnicos { margin-top: 14px; }
+.detalhes-tecnicos summary { cursor: pointer; color: var(--tinta-suave); font-size: 13px; }
+.detalhes-tecnicos .console { margin-top: 10px; }
+
+/* ---- Atalhos do Início ---- */
+.atalhos { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+           gap: 12px; margin-bottom: 18px; }
+.atalho { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px;
+          background: var(--papel); border: 1px solid var(--borda); border-radius: 10px;
+          color: var(--tinta); text-decoration: none; transition: border-color .15s, box-shadow .15s; }
+.atalho:hover { border-color: var(--realce); box-shadow: 0 2px 10px rgba(27,95,168,.12); }
+.atalho strong { font-size: 16px; }
+.atalho span { font-size: 13px; color: var(--tinta-suave); }
+.atalho-principal { background: var(--realce); border-color: var(--realce); }
+.atalho-principal strong, .atalho-principal span { color: #fff; }
+.atalho-principal:hover { box-shadow: 0 4px 14px rgba(27,95,168,.3); }

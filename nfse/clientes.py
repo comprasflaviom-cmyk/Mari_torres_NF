@@ -277,7 +277,9 @@ class RepositorioClientes:
         if busca.strip():
             condicoes.append("(razao_social LIKE ? OR documento LIKE ? OR email LIKE ?)")
             alvo = f"%{busca.strip()}%"
-            parametros += [alvo, alvo, alvo]
+            # CNPJ digitado com pontuação também acha (no banco é só dígito).
+            digitos = somente_digitos(busca)
+            parametros += [alvo, f"%{digitos}%" if len(digitos) >= 3 else alvo, alvo]
         if condicoes:
             consulta += " WHERE " + " AND ".join(condicoes)
         consulta += " ORDER BY ativo DESC, razao_social COLLATE NOCASE"

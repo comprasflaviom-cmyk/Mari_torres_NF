@@ -1206,3 +1206,58 @@ def test_filtros_de_formato_brasileiro():
     assert _data_br("2026-10-07T14:03:00", True) == "07/10/2026 14:03"
     assert _competencia_br("2026-09") == "09/2026"
     assert _data_br("") == "—"
+
+
+# ---------------------------------------------------------------------------
+# Início, Configuração em abas, filtros de clientes, resultado amigável
+# ---------------------------------------------------------------------------
+def test_inicio_tem_atalhos_e_resumo_do_mes(cliente):
+    from datetime import date
+
+    from app.rotas_clientes import repositorio_emissoes
+
+    repositorio_emissoes().registrar({
+        "chave_acesso": "CHAVE-MES", "documento_tomador": "11222333000181", "tomador": "Cliente Alfa",
+        "valor_servico": "1500.00", "n_nfse": "90", "competencia": date.today().strftime("%Y-%m"),
+        "emitida_em": date.today().isoformat() + "T09:00:00", "ambiente": "homologacao",
+    })
+    html = cliente.get("/").text
+    for atalho in ('href="/avulsa"', 'href="/recibos"', 'href="/emitir"', 'href="/clientes/novo"'):
+        assert 'class="atalho' in html and atalho in html
+    assert "R$ 1.500,00" in html
+    assert "/danfse/CHAVE-MES" in html
+
+
+def test_configuracao_em_abas(cliente):
+    html = cliente.get("/configuracao").text
+    for aba in ("empresa", "certificado", "servico", "email", "avancado"):
+        assert f'data-aba="{aba}"' in html and f'data-painel="{aba}"' in html
+    assert html.count('type="submit">Salvar configuração') == 1
+
+
+def test_lista_de_clientes_em_abas(cliente):
+    _cadastrar(cliente)
+    _cadastrar(cliente, documento="11444777000161", razao_social="Cliente Beta", ativo="")
+    _cadastrar(cliente, documento="52998224725", razao_social="Ana Mensal",
+               dia_emissao_recorrente="5", descricao_recorrente="Consultoria")
+
+    ativos = cliente.get("/clientes").text
+    assert "Cliente Alfa" in ativos and "Ana Mensal" in ativos and "Cliente Beta" not in ativos
+    assert "Cliente Beta" in cliente.get("/clientes?filtro=inativos").text
+    mensais = cliente.get("/clientes?filtro=mensais").text
+    assert "Ana Mensal" in mensais and "Cliente Alfa" not in mensais
+    # Busca com o CNPJ pontuado acha o cliente gravado só com dígitos.
+    assert "Cliente Alfa" in cliente.get("/clientes?busca=11.222.333/0001-81").text
+
+
+def test_evento_de_nota_traz_o_numero_da_nfse():
+    from app.sessao import _evento_para_json
+    from nfse.logs import RegistroLinha
+    from nfse.servico import EventoProgresso
+
+    registro = RegistroLinha(linha_planilha=1, situacao="AUTORIZADA", n_nfse="84",
+                             documento_tomador="11222333000181")
+    dados = _evento_para_json(EventoProgresso(tipo="fim_linha", mensagem="", situacao="AUTORIZADA",
+                                                  registro=registro))
+    assert dados["registro"]["n_nfse"] == "84"
+    assert dados["registro"]["documento_tomador"] == "11222333000181"

@@ -19,20 +19,25 @@
 <div class="cartao">
   <div style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap">
     <form method="get" action="/clientes" style="display:flex; gap:12px; align-items:flex-end; flex:1; min-width:280px">
+      <input type="hidden" name="filtro" value="{{ filtro }}">
       <div class="campo" style="flex:1">
         <label for="busca">Buscar por nome, CNPJ/CPF ou e-mail</label>
         <input type="text" id="busca" name="busca" value="{{ busca }}">
       </div>
-      <div class="campo-caixa" style="padding-bottom:10px">
-        <input type="checkbox" id="apenas_ativos" name="apenas_ativos" value="1"
-               {{ 'checked' if apenas_ativos }} onchange="this.form.submit()">
-        <label for="apenas_ativos" style="font-weight:400">Só ativos</label>
-      </div>
       <button class="botao" type="submit">Buscar</button>
+      {% if busca %}<a class="botao" href="/clientes?filtro={{ filtro }}">Limpar</a>{% endif %}
     </form>
     <a class="botao botao-principal" href="/clientes/novo">Novo cliente</a>
   </div>
 </div>
+
+<nav class="abas" aria-label="Filtrar clientes">
+  {% for chave, rotulo in [('ativos', 'Ativos'), ('mensais', 'Com nota mensal'), ('inativos', 'Inativos'), ('todos', 'Todos')] %}
+  <a class="aba {{ 'ativa' if filtro == chave }}"
+     href="/clientes?filtro={{ chave }}{{ ('&busca=' ~ (busca | urlencode)) if busca }}">{{ rotulo }}
+    <span class="contador">{{ contagem[chave] }}</span></a>
+  {% endfor %}
+</nav>
 
 {% if clientes %}
 <div class="rolagem">
@@ -48,6 +53,7 @@
       <tr data-documento="{{ c.documento }}" class="{{ '' if c.ativo else 'inativa' }}">
         <td>
           <a href="/clientes/editar/{{ c.documento }}"><strong>{{ c.razao_social }}</strong></a>
+          {% if c.recorrente %}<span class="etiqueta etiqueta-neutra">mensal dia {{ c.dia_emissao_recorrente }}</span>{% endif %}
           {% if c.cod_municipio %}<br><span class="discreto">{{ c.bairro }} — {{ c.uf }}</span>{% endif %}
         </td>
         <td class="mono">{{ c.documento | documento }}</td>
@@ -75,8 +81,10 @@
 <p class="discreto" style="margin-top:12px">{{ clientes | length }} cliente(s).</p>
 {% else %}
 <div class="cartao vazio">
-  <p>{{ 'Nenhum cliente corresponde à busca.' if busca else 'Nenhum cliente cadastrado ainda.' }}</p>
-  <a class="botao botao-principal" href="/clientes/novo">Cadastrar o primeiro</a>
+  <p>{% if busca %}Nenhum cliente corresponde à busca.
+     {% elif contagem.todos %}Nenhum cliente nesta aba.
+     {% else %}Nenhum cliente cadastrado ainda.{% endif %}</p>
+  {% if not contagem.todos %}<a class="botao botao-principal" href="/clientes/novo">Cadastrar o primeiro</a>{% endif %}
 </div>
 {% endif %}
 

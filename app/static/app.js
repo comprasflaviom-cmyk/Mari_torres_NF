@@ -85,6 +85,61 @@
     window.addEventListener("resize", fechar);
   })();
 
+  /* ---- Resultado de uma nota em linguagem de gente ----
+     Situação, número da nota, o que aconteceu com o e-mail e o botão do PDF.
+     O log técnico continua existindo, mas fica em "Detalhes técnicos". */
+  var ROTULO_SITUACAO = {
+    AUTORIZADA: ["Emitida", "etiqueta-ok"],
+    REJEITADA: ["Recusada pela Receita", "etiqueta-erro"],
+    INVALIDA: ["Dados com problema", "etiqueta-erro"],
+    ERRO_LOCAL: ["Não foi possível emitir", "etiqueta-erro"],
+    PULADA: ["Já emitida antes", "etiqueta-neutra"]
+  };
+
+  function resultadoAmigavel(ev) {
+    var r = ev.registro || {};
+    var caixa = document.createElement("div");
+    caixa.className = "resultado-nota";
+    var rotulo = ROTULO_SITUACAO[ev.situacao] || [ev.situacao || "—", "etiqueta-neutra"];
+    var simulada = ev.situacao === "PULADA" && /dry-run|simula/i.test(r.detalhe || "");
+    if (simulada) rotulo = ["Simulação OK — nada foi enviado à Receita", "etiqueta-neutra"];
+
+    function linha() {
+      var div = document.createElement("div");
+      div.className = "linha";
+      caixa.appendChild(div);
+      return div;
+    }
+    function texto(alvo, conteudo, classe) {
+      var span = document.createElement("span");
+      span.className = classe || "";
+      span.textContent = conteudo;
+      alvo.appendChild(span);
+      return span;
+    }
+
+    var topo = linha();
+    texto(topo, rotulo[0], "etiqueta " + rotulo[1]);
+    if (ev.situacao === "AUTORIZADA") {
+      if (r.n_nfse) texto(topo, "Nota nº " + r.n_nfse, "forte");
+      if (r.chave_acesso) {
+        var pdf = document.createElement("a");
+        pdf.href = "/danfse/" + encodeURIComponent(r.chave_acesso);
+        pdf.target = "_blank";
+        pdf.className = "botao botao-pequeno";
+        pdf.textContent = "Abrir PDF";
+        topo.appendChild(pdf);
+      }
+      var email = r.email || "";
+      var enviado = /^e-mail (enviado|redirecionado)/i.test(email);
+      if (email) texto(linha(), (enviado ? "✉ " : "⚠ ") + email, enviado ? "discreto" : "aviso-texto");
+    } else if (!simulada) {
+      var motivo = (r.detalhe || ev.mensagem || "").trim();
+      if (motivo) texto(linha(), motivo, "discreto");
+    }
+    return caixa;
+  }
+
   /* ---- Abas dentro da página (ficha do cliente) ----
      [data-abas] tem botões [data-aba="x"]; cada painel é [data-painel="x"].
      [data-so-com-abas="a b"] só aparece nessas abas (ex.: o botão Salvar).
@@ -108,6 +163,10 @@
         el.hidden = el.getAttribute("data-so-com-abas").split(" ").indexOf(nome) < 0;
       });
       if (guardar) history.replaceState(null, "", "#" + nome);
+      /* Depois de salvar, a página volta na mesma aba. */
+      document.querySelectorAll("form[data-manter-aba]").forEach(function (f) {
+        f.setAttribute("action", f.getAttribute("action").split("#")[0] + "#" + nome);
+      });
     }
 
     botoes.forEach(function (b) {
@@ -306,13 +365,9 @@
     var celula = linha.querySelector("td.resultado");
     if (!celula) return;
 
-    var classe = ev.situacao === "AUTORIZADA" ? "etiqueta-ok"
-      : (ev.situacao === "PULADA" ? "etiqueta-neutra" : "etiqueta-erro");
-    var detalhe = ev.registro && (ev.registro.chave_acesso || ev.registro.detalhe) || "";
     celula.className = "resultado";
-    celula.innerHTML = '<span class="etiqueta ' + classe + '"></span> <span class="discreto"></span>';
-    celula.querySelector(".etiqueta").textContent = ev.situacao;
-    celula.querySelector(".discreto").textContent = detalhe;
+    celula.innerHTML = "";
+    celula.appendChild(resultadoAmigavel(ev));
   }
 
   function habilitar(ligado) {
@@ -535,6 +590,7 @@
     var painel = document.getElementById("painel-progresso");
     var barra = document.getElementById("barra-preenchida");
     var situacao = document.getElementById("situacao-avulsa");
+    var resultadoEl = document.getElementById("resultado-avulsa");
     var cortina = document.getElementById("cortina");
     var confirmacao = document.getElementById("confirmacao");
     var btnConfirmar = document.getElementById("btn-confirmar");
@@ -553,6 +609,7 @@
     function acompanhar() {
       painel.hidden = false;
       consoleEl.innerHTML = "";
+      resultadoEl.innerHTML = "";
       barra.style.width = "0";
       if (fonte) fonte.close();
       fonte = new EventSource("/emitir/eventos");
@@ -563,19 +620,8 @@
           barra.style.width = "100%";
           escrever(ev.mensagem, ev.situacao === "AUTORIZADA" ? "l-ok"
             : (ev.situacao === "PULADA" ? "l-fraco" : "l-erro"));
-          var chave = ev.registro && ev.registro.chave_acesso;
-          if (ev.situacao === "AUTORIZADA" && chave) {
-            /* Atalho para imprimir: o PDF também fica no Histórico. */
-            var link = document.createElement("a");
-            link.href = "/danfse/" + encodeURIComponent(chave);
-            link.target = "_blank";
-            link.className = "botao botao-pequeno";
-            link.textContent = "Abrir PDF da nota (imprimir / salvar)";
-            var linhaLink = document.createElement("div");
-            linhaLink.style.marginTop = "10px";
-            linhaLink.appendChild(link);
-            consoleEl.appendChild(linhaLink);
-          }
+          resultadoEl.innerHTML = "";
+          resultadoEl.appendChild(resultadoAmigavel(ev));
         } else if (ev.tipo === "encerrado") {
           situacao.textContent = ev.mensagem;
           habilitar(true);
@@ -681,15 +727,21 @@
     }
 
     function acompanhar(situacao) {
+      var emitida = false;
       var fonte = new EventSource("/emitir/eventos");
       fonte.onmessage = function (e) {
         var ev = JSON.parse(e.data);
         if (ev.tipo === "encerrado") {
-          situacao.textContent = ev.mensagem;
+          if (!situacao.querySelector(".resultado-nota")) situacao.textContent = ev.mensagem;
           fonte.close();
-          setTimeout(function () { location.reload(); }, 1200);
+          /* Deu certo: a lista se atualiza depois de dar tempo de ler. Deu
+             errado: fica parado, com o motivo na tela. */
+          if (emitida) setTimeout(function () { location.reload(); }, 3000);
+          else travarBotoes(false);
         } else if (ev.tipo === "fim_linha") {
-          situacao.textContent = ev.situacao === "AUTORIZADA" ? "Autorizada." : ev.mensagem;
+          emitida = ev.situacao === "AUTORIZADA";
+          situacao.innerHTML = "";
+          situacao.appendChild(resultadoAmigavel(ev));
         }
       };
       fonte.onerror = function () { fonte.close(); };

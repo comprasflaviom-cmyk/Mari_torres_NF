@@ -51,14 +51,17 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
     # Lista e edição
     # ------------------------------------------------------------------
     @app.get("/clientes", response_class=HTMLResponse)
-    def listar_clientes(requisicao: Request, busca: str = "", apenas_ativos: str = ""):
-        repo = repositorio_clientes()
-        somente_ativos = apenas_ativos in ("1", "true", "on")
+    def listar_clientes(requisicao: Request, busca: str = "", filtro: str = "ativos",
+                        apenas_ativos: str = ""):
+        if apenas_ativos in ("1", "true", "on"):      # endereço antigo, ainda aceito
+            filtro = "ativos"
+        todos = repositorio_clientes().listar(busca=busca)
+        grupos = _grupos_de_clientes(todos)
+        filtro = filtro if filtro in grupos else "ativos"
         return pagina(
             requisicao, "clientes.html",
-            clientes=repo.listar(busca=busca, apenas_ativos=somente_ativos),
-            busca=busca,
-            apenas_ativos=somente_ativos,
+            clientes=grupos[filtro], contagem={k: len(v) for k, v in grupos.items()},
+            filtro=filtro, busca=busca,
         )
 
     @app.get("/clientes/novo", response_class=HTMLResponse)
@@ -147,13 +150,13 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
                 raise ValueError("O arquivo deve conter uma lista de clientes.")
         except (json.JSONDecodeError, ValueError, UnicodeDecodeError) as exc:
             return pagina(requisicao, "clientes.html",
-                          clientes=repositorio_clientes().listar(), busca="", apenas_ativos=False,
+                          **_lista_completa(),
                           erro=f"Arquivo inválido: {exc}")
 
         criados, atualizados, erros = repositorio_clientes().importar(registros)
         return pagina(
             requisicao, "clientes.html",
-            clientes=repositorio_clientes().listar(), busca="", apenas_ativos=False,
+            **_lista_completa(),
             resultado_importacao={"criados": criados, "atualizados": atualizados, "erros": erros},
         )
 
@@ -251,6 +254,23 @@ def registrar(app: FastAPI, pagina, config_tolerante) -> None:
             return JSONResponse({"ok": False, "mensagem": str(exc)}, 409)
 
         return JSONResponse({"ok": True, "total": 1, "dry_run": dry_run})
+
+
+def _grupos_de_clientes(clientes: list[Cliente]) -> dict[str, list[Cliente]]:
+    """As abas da lista de clientes."""
+    return {
+        "ativos": [c for c in clientes if c.ativo],
+        "mensais": [c for c in clientes if c.ativo and c.recorrente],
+        "inativos": [c for c in clientes if not c.ativo],
+        "todos": clientes,
+    }
+
+
+def _lista_completa() -> dict:
+    todos = repositorio_clientes().listar()
+    grupos = _grupos_de_clientes(todos)
+    return {"clientes": todos, "contagem": {k: len(v) for k, v in grupos.items()},
+            "filtro": "todos", "busca": ""}
 
 
 def _historico_do_cliente(documento: str) -> dict:

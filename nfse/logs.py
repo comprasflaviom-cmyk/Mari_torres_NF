@@ -15,6 +15,7 @@ CAMPOS_RELATORIO = [
     "razao_social",
     "valor_servico",
     "numero_dps",
+    "n_nfse",
     "chave_acesso",
     "detalhe",
     "email",
@@ -36,6 +37,7 @@ class RegistroLinha:
     detalhe: str = ""
     email: str = ""          # resultado do envio ao cliente
     arquivo_xml: str = ""
+    n_nfse: str = ""         # número da NFS-e dado pela Receita
 
 
 @dataclass

@@ -175,7 +175,6 @@ AJUDA: dict[str, str] = {
     ),
     "busca": "Digite parte do nome, do CNPJ/CPF ou do e-mail e clique em Buscar.",
     "historico:busca": "Digite parte do nome do cliente, do CNPJ ou da chave de acesso da nota.",
-    "apenas_ativos": "Mostra só os clientes ativos.",
     # ---------------- Nota avulsa ----------------
     "tomador_documento": "Escolha um cliente já cadastrado. Para alguém novo, marque \"Outro tomador\" acima.",
     "avulsa:competencia": "Mês em que o serviço foi prestado. Ex.: trabalho feito em setembro → 09/2026.",

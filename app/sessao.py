@@ -303,6 +303,7 @@ def _evento_para_json(evento: EventoProgresso) -> dict:
             "documento_tomador": evento.registro.documento_tomador,
             "numero_dps": evento.registro.numero_dps,
             "arquivo_xml": evento.registro.arquivo_xml,
+            "n_nfse": evento.registro.n_nfse,
             "valor_servico": evento.registro.valor_servico,
             "chave_acesso": evento.registro.chave_acesso,
             "detalhe": evento.registro.detalhe,

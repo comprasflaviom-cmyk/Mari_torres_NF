@@ -3,8 +3,7 @@
 {% block conteudo %}
 <h1>Configuração</h1>
 <p class="subtitulo">
-  Preenchido uma vez, na instalação. As senhas ficam no cofre do sistema operacional,
-  nunca em arquivo de texto.
+  Preenchida uma vez, na instalação. Use as abas abaixo; o botão Salvar grava todas de uma vez.
 </p>
 
 {% if salvo %}<div class="aviso aviso-ok"><strong>Configuração salva.</strong></div>{% endif %}
@@ -27,8 +26,17 @@
   </div>
 {% endif %}
 
-<form method="post" action="/configuracao" enctype="multipart/form-data">
+<div class="abas" role="tablist" data-abas>
+  <button type="button" class="aba" data-aba="empresa">Empresa</button>
+  <button type="button" class="aba" data-aba="certificado">Certificado</button>
+  <button type="button" class="aba" data-aba="servico">Serviço e impostos</button>
+  <button type="button" class="aba" data-aba="email">E-mail</button>
+  <button type="button" class="aba" data-aba="avancado">Avançado</button>
+</div>
 
+<form method="post" action="/configuracao" enctype="multipart/form-data" data-manter-aba>
+
+<section data-painel="empresa">
   <div class="cartao">
     <h2 style="margin-top:0">Ambiente</h2>
     <div class="grade">
@@ -46,48 +54,6 @@
           Só passe para o modo real depois de testar algumas notas no modo teste.
         </span>
       </div>
-    </div>
-  </div>
-
-  <div class="cartao">
-    <h2 style="margin-top:0">Certificado Digital A1</h2>
-    {% if not cofre_ok %}
-      <div class="aviso aviso-atencao">
-        O cofre de senhas do sistema não está disponível nesta máquina; a senha não
-        poderá ser guardada entre sessões.
-      </div>
-    {% endif %}
-    <div class="grade">
-      <div class="campo">
-        <label for="certificado_arquivo">Arquivo do certificado (.pfx ou .p12)</label>
-        <input type="file" id="certificado_arquivo" name="certificado_arquivo" accept=".pfx,.p12">
-        <span class="dica">
-          {% if config.caminho_certificado_pfx %}
-            Já configurado. Envie um arquivo novo só ao renovar o certificado.
-          {% else %}
-            É o arquivo entregue pela sua Autoridade Certificadora.
-          {% endif %}
-          Uma cópia protegida fica na pasta do aplicativo.
-        </span>
-      </div>
-      <div class="campo">
-        <label for="senha_certificado">Senha do certificado</label>
-        <input type="password" id="senha_certificado" name="senha_certificado" autocomplete="new-password"
-               placeholder="{{ 'Já cadastrada — deixe em branco para manter' if tem_senha_certificado else '' }}">
-        <span class="dica">Guardada no cofre do sistema, fora do arquivo de configuração.</span>
-      </div>
-    </div>
-    <div class="acoes">
-      <button class="botao" type="button" data-testar="/configuracao/testar-certificado"
-              data-saida="resultado-certificado">
-        Testar certificado
-      </button>
-      <span id="resultado-certificado" class="discreto"></span>
-      <button class="botao" type="button" data-testar="/configuracao/testar-conexao"
-              data-saida="resultado-conexao">
-        Testar conexão com a Receita
-      </button>
-      <span id="resultado-conexao" class="discreto"></span>
     </div>
   </div>
 
@@ -161,7 +127,53 @@
       Regime tributário errado altera o imposto devido. Confirme estes campos com o seu contador.
     </p>
   </div>
+</section>
 
+<section data-painel="certificado">
+  <div class="cartao">
+    <h2 style="margin-top:0">Certificado Digital A1</h2>
+    {% if not cofre_ok %}
+      <div class="aviso aviso-atencao">
+        O cofre de senhas do sistema não está disponível nesta máquina; a senha não
+        poderá ser guardada entre sessões.
+      </div>
+    {% endif %}
+    <div class="grade">
+      <div class="campo">
+        <label for="certificado_arquivo">Arquivo do certificado (.pfx ou .p12)</label>
+        <input type="file" id="certificado_arquivo" name="certificado_arquivo" accept=".pfx,.p12">
+        <span class="dica">
+          {% if config.caminho_certificado_pfx %}
+            Já configurado. Envie um arquivo novo só ao renovar o certificado.
+          {% else %}
+            É o arquivo entregue pela sua Autoridade Certificadora.
+          {% endif %}
+          Uma cópia protegida fica na pasta do aplicativo.
+        </span>
+      </div>
+      <div class="campo">
+        <label for="senha_certificado">Senha do certificado</label>
+        <input type="password" id="senha_certificado" name="senha_certificado" autocomplete="new-password"
+               placeholder="{{ 'Já cadastrada — deixe em branco para manter' if tem_senha_certificado else '' }}">
+        <span class="dica">Guardada no cofre do sistema, fora do arquivo de configuração.</span>
+      </div>
+    </div>
+    <div class="acoes">
+      <button class="botao" type="button" data-testar="/configuracao/testar-certificado"
+              data-saida="resultado-certificado">
+        Testar certificado
+      </button>
+      <span id="resultado-certificado" class="discreto"></span>
+      <button class="botao" type="button" data-testar="/configuracao/testar-conexao"
+              data-saida="resultado-conexao">
+        Testar conexão com a Receita
+      </button>
+      <span id="resultado-conexao" class="discreto"></span>
+    </div>
+  </div>
+</section>
+
+<section data-painel="servico">
   <div class="cartao">
     <h2 style="margin-top:0">Serviço prestado</h2>
     <div class="grade">
@@ -221,7 +233,96 @@
       </div>
     </div>
   </div>
+</section>
 
+<section data-painel="email">
+  <div class="cartao">
+    <h2 style="margin-top:0">Envio automático ao cliente</h2>
+    <div class="campo-caixa" style="margin-bottom:16px">
+      <input type="checkbox" id="email_enviar" name="email_enviar" {{ 'checked' if config.email_enviar }}>
+      <label for="email_enviar" style="font-weight:600">
+        Enviar a nota por e-mail assim que for autorizada
+        <span class="dica">
+          O cliente recebe o PDF (DANFSe) e o XML anexos. No modo teste o envio fica
+          bloqueado, a menos que você libere abaixo.
+        </span>
+      </label>
+    </div>
+    <div class="grade">
+      <div class="campo">
+        <label for="email_smtp_servidor">Servidor SMTP</label>
+        <input type="text" id="email_smtp_servidor" name="email_smtp_servidor" value="{{ config.email_smtp_servidor }}">
+      </div>
+      <div class="campo">
+        <label for="email_smtp_porta">Porta</label>
+        <input type="number" id="email_smtp_porta" name="email_smtp_porta" value="{{ config.email_smtp_porta }}">
+      </div>
+      <div class="campo">
+        <label for="email_smtp_usuario">Usuário SMTP</label>
+        <input type="text" id="email_smtp_usuario" name="email_smtp_usuario" value="{{ config.email_smtp_usuario }}">
+      </div>
+      <div class="campo">
+        <label for="senha_smtp">Senha SMTP</label>
+        <input type="password" id="senha_smtp" name="senha_smtp" autocomplete="new-password"
+               placeholder="{{ 'Já cadastrada — deixe em branco para manter' if tem_senha_smtp else '' }}">
+        <span class="dica">
+          No Gmail/Workspace use uma <strong>Senha de app</strong>, não a senha da conta.
+        </span>
+      </div>
+      <div class="campo">
+        <label for="email_remetente">E-mail remetente</label>
+        <input type="email" id="email_remetente" name="email_remetente" value="{{ config.email_remetente }}">
+      </div>
+      <div class="campo">
+        <label for="email_remetente_nome">Nome do remetente</label>
+        <input type="text" id="email_remetente_nome" name="email_remetente_nome" value="{{ config.email_remetente_nome }}">
+      </div>
+      <div class="campo">
+        <label for="email_bcc">Cópia oculta (separada por vírgula)</label>
+        <input type="text" id="email_bcc" name="email_bcc" value="{{ config.email_bcc | join(', ') }}"
+               placeholder="contador@escritorio.com.br">
+      </div>
+      <div class="campo">
+        <label for="email_teste_destino">Redirecionar todos os e-mails para</label>
+        <input type="email" id="email_teste_destino" name="email_teste_destino" value="{{ config.email_teste_destino }}">
+        <span class="dica">
+          Preenchido, <strong>nenhum cliente recebe nada</strong> — tudo vai para este endereço.
+          Use enquanto valida o modelo da mensagem.
+        </span>
+      </div>
+    </div>
+    <div class="campo-caixa" style="margin-top:16px">
+      <input type="checkbox" id="email_smtp_starttls" name="email_smtp_starttls" {{ 'checked' if config.email_smtp_starttls }}>
+      <label for="email_smtp_starttls" style="font-weight:400">Usar STARTTLS (porta 587). Desmarque para SSL direto (porta 465).</label>
+    </div>
+    <div class="campo-caixa">
+      <input type="checkbox" id="email_permitir_homologacao" name="email_permitir_homologacao"
+             {{ 'checked' if config.email_permitir_homologacao }}>
+      <label for="email_permitir_homologacao" style="font-weight:400">
+        Permitir envio também no modo teste
+        <span class="dica">Só marque junto com o redirecionamento acima.</span>
+      </label>
+    </div>
+    <div class="grade" style="margin-top:16px">
+      <div class="campo">
+        <label for="email_assunto">Assunto</label>
+        <input type="text" id="email_assunto" name="email_assunto" value="{{ config.email_assunto }}">
+        <span class="dica">Variáveis: {tomador} {competencia} {valor} {chave} {chave_curta} {descricao} {prestador}</span>
+      </div>
+      <div class="campo">
+        <label for="email_corpo">Corpo da mensagem</label>
+        <textarea id="email_corpo" name="email_corpo" placeholder="Em branco usa o modelo padrão.">{{ config.email_corpo }}</textarea>
+      </div>
+    </div>
+    <div class="acoes">
+      <button class="botao" type="button" data-testar="/configuracao/testar-email"
+              data-saida="resultado-email">Enviar e-mail de teste</button>
+      <span id="resultado-email" class="discreto"></span>
+    </div>
+  </div>
+</section>
+
+<section data-painel="avancado">
   <div class="cartao">
     <h2 style="margin-top:0">Numeração e pastas</h2>
     <div class="grade">
@@ -315,91 +416,7 @@
       </span>
     </div>
   </div>
-
-  <div class="cartao">
-    <h2 style="margin-top:0">Envio automático ao cliente</h2>
-    <div class="campo-caixa" style="margin-bottom:16px">
-      <input type="checkbox" id="email_enviar" name="email_enviar" {{ 'checked' if config.email_enviar }}>
-      <label for="email_enviar" style="font-weight:600">
-        Enviar a nota por e-mail assim que for autorizada
-        <span class="dica">
-          O cliente recebe o PDF (DANFSe) e o XML anexos. No modo teste o envio fica
-          bloqueado, a menos que você libere abaixo.
-        </span>
-      </label>
-    </div>
-    <div class="grade">
-      <div class="campo">
-        <label for="email_smtp_servidor">Servidor SMTP</label>
-        <input type="text" id="email_smtp_servidor" name="email_smtp_servidor" value="{{ config.email_smtp_servidor }}">
-      </div>
-      <div class="campo">
-        <label for="email_smtp_porta">Porta</label>
-        <input type="number" id="email_smtp_porta" name="email_smtp_porta" value="{{ config.email_smtp_porta }}">
-      </div>
-      <div class="campo">
-        <label for="email_smtp_usuario">Usuário SMTP</label>
-        <input type="text" id="email_smtp_usuario" name="email_smtp_usuario" value="{{ config.email_smtp_usuario }}">
-      </div>
-      <div class="campo">
-        <label for="senha_smtp">Senha SMTP</label>
-        <input type="password" id="senha_smtp" name="senha_smtp" autocomplete="new-password"
-               placeholder="{{ 'Já cadastrada — deixe em branco para manter' if tem_senha_smtp else '' }}">
-        <span class="dica">
-          No Gmail/Workspace use uma <strong>Senha de app</strong>, não a senha da conta.
-        </span>
-      </div>
-      <div class="campo">
-        <label for="email_remetente">E-mail remetente</label>
-        <input type="email" id="email_remetente" name="email_remetente" value="{{ config.email_remetente }}">
-      </div>
-      <div class="campo">
-        <label for="email_remetente_nome">Nome do remetente</label>
-        <input type="text" id="email_remetente_nome" name="email_remetente_nome" value="{{ config.email_remetente_nome }}">
-      </div>
-      <div class="campo">
-        <label for="email_bcc">Cópia oculta (separada por vírgula)</label>
-        <input type="text" id="email_bcc" name="email_bcc" value="{{ config.email_bcc | join(', ') }}"
-               placeholder="contador@escritorio.com.br">
-      </div>
-      <div class="campo">
-        <label for="email_teste_destino">Redirecionar todos os e-mails para</label>
-        <input type="email" id="email_teste_destino" name="email_teste_destino" value="{{ config.email_teste_destino }}">
-        <span class="dica">
-          Preenchido, <strong>nenhum cliente recebe nada</strong> — tudo vai para este endereço.
-          Use enquanto valida o modelo da mensagem.
-        </span>
-      </div>
-    </div>
-    <div class="campo-caixa" style="margin-top:16px">
-      <input type="checkbox" id="email_smtp_starttls" name="email_smtp_starttls" {{ 'checked' if config.email_smtp_starttls }}>
-      <label for="email_smtp_starttls" style="font-weight:400">Usar STARTTLS (porta 587). Desmarque para SSL direto (porta 465).</label>
-    </div>
-    <div class="campo-caixa">
-      <input type="checkbox" id="email_permitir_homologacao" name="email_permitir_homologacao"
-             {{ 'checked' if config.email_permitir_homologacao }}>
-      <label for="email_permitir_homologacao" style="font-weight:400">
-        Permitir envio também no modo teste
-        <span class="dica">Só marque junto com o redirecionamento acima.</span>
-      </label>
-    </div>
-    <div class="grade" style="margin-top:16px">
-      <div class="campo">
-        <label for="email_assunto">Assunto</label>
-        <input type="text" id="email_assunto" name="email_assunto" value="{{ config.email_assunto }}">
-        <span class="dica">Variáveis: {tomador} {competencia} {valor} {chave} {chave_curta} {descricao} {prestador}</span>
-      </div>
-      <div class="campo">
-        <label for="email_corpo">Corpo da mensagem</label>
-        <textarea id="email_corpo" name="email_corpo" placeholder="Em branco usa o modelo padrão.">{{ config.email_corpo }}</textarea>
-      </div>
-    </div>
-    <div class="acoes">
-      <button class="botao" type="button" data-testar="/configuracao/testar-email"
-              data-saida="resultado-email">Enviar e-mail de teste</button>
-      <span id="resultado-email" class="discreto"></span>
-    </div>
-  </div>
+</section>
 
   <div class="acoes">
     <button class="botao botao-principal" type="submit">Salvar configuração</button>

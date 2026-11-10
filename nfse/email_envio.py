@@ -123,7 +123,7 @@ def enviar_nfse(
     """
     if not config_email.ativo:
         return ("e-mail NÃO enviado: o envio automático está desligado "
-                "(Configuração → \"Enviar a nota por e-mail assim que for autorizada\"). "
+                "(Configuração → E-mail → \"Enviar a nota por e-mail assim que for autorizada\"). "
                 "Use Histórico → Reenviar e-mail")
 
     if ambiente != "producao" and not config_email.permitir_homologacao:
@@ -216,7 +216,7 @@ def _montar_mensagem(
 
 
 DICA_PORTA = (
-    "Confira em Configuração → Envio automático: servidor, porta e a caixa STARTTLS. "
+    "Confira em Configuração → E-mail: servidor, porta e a caixa STARTTLS. "
     "Porta 587 = STARTTLS marcado; porta 465 = SSL direto (o app ajusta sozinho)."
 )
 

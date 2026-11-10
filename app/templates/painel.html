@@ -2,8 +2,67 @@
 {% set pagina_atual = 'painel' %}
 {% block conteudo %}
 <h1>Início</h1>
-<p class="subtitulo">Situação do emissor antes de você começar a faturar.</p>
+<p class="subtitulo">O que você quer fazer?</p>
 
+<div class="atalhos">
+  <a class="atalho atalho-principal" href="/avulsa">
+    <strong>Emitir nota</strong><span>Uma nota agora, para um cliente do cadastro ou novo.</span>
+  </a>
+  <a class="atalho" href="/recibos">
+    <strong>Gerar recibo</strong><span>Recibo em PDF para o cliente. Não vai à Receita.</span>
+  </a>
+  <a class="atalho" href="/emitir">
+    <strong>Emitir pela planilha</strong><span>Várias notas de uma vez, a partir do Excel.</span>
+  </a>
+  <a class="atalho" href="/recorrencias">
+    <strong>Notas mensais</strong>
+    <span>{% if pendentes_recorrencia %}<b class="contador contador-alerta">{{ pendentes_recorrencia }}</b> esperando você{% else %}Nada pendente agora.{% endif %}</span>
+  </a>
+  <a class="atalho" href="/clientes/novo">
+    <strong>Novo cliente</strong><span>Cadastre uma vez, use sempre.</span>
+  </a>
+</div>
+
+<div class="cartao">
+  <div class="cabecalho-pagina">
+    <h2 style="margin:0">{{ resumo.mes | capitalize }}</h2>
+    <a class="botao botao-pequeno" href="/historico">Ver todas as notas</a>
+  </div>
+  <div class="cartoes" style="margin-top:14px">
+    <div class="indicador">
+      <div class="rotulo">Notas emitidas{{ '' if producao else ' (modo teste)' }}</div>
+      <div class="valor">{{ resumo.notas }}</div>
+      <div class="discreto">R$ {{ resumo.total_notas | moeda }}</div>
+    </div>
+    <div class="indicador">
+      <div class="rotulo">Recibos gerados</div>
+      <div class="valor">{{ resumo.recibos }}</div>
+      <div class="discreto">R$ {{ resumo.total_recibos | moeda }}</div>
+    </div>
+  </div>
+  {% if resumo.ultimas %}
+  <div class="rolagem" style="margin-top:14px">
+    <table>
+      <thead><tr><th>Nº</th><th>Cliente</th><th class="numerico">Valor</th><th>Emitida em</th><th></th></tr></thead>
+      <tbody>
+        {% for n in resumo.ultimas %}
+        <tr>
+          <td><strong>{{ n.n_nfse or '—' }}</strong></td>
+          <td>{% if n.documento %}<a href="/clientes/editar/{{ n.documento }}#notas">{{ n.tomador }}</a>{% else %}{{ n.tomador }}{% endif %}</td>
+          <td class="numerico">R$ {{ n.valor_servico | moeda }}</td>
+          <td class="discreto">{{ n.emitida_em | data(true) }}</td>
+          <td><a class="botao botao-pequeno" href="/danfse/{{ n.chave_acesso }}" target="_blank">PDF</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="discreto" style="margin:12px 0 0">Nenhuma nota emitida este mês ainda.</p>
+  {% endif %}
+</div>
+
+<h2>Situação do emissor</h2>
 <div class="cartoes">
   <div class="indicador">
     <div class="rotulo">Modo de emissão</div>
@@ -52,7 +111,7 @@
     <span class="mono">{{ conflito_maquina }}</span>, e este é
     <span class="mono">{{ maquina }}</span>. Duas máquinas na mesma série geram
     numeração repetida — a emissão está bloqueada até você resolver isso na
-    tela de <a href="/configuracao">Configuração</a>.
+    tela de <a href="/configuracao#avancado">Configuração</a>.
   </div>
 {% endif %}
 
@@ -61,7 +120,7 @@
     <strong>Backup automático desligado.</strong>
     Se este laptop parar de funcionar, as notas emitidas e o controle de
     numeração vão junto. Aponte uma pasta (OneDrive, Drive ou rede) na
-    <a href="/configuracao">Configuração</a>.
+    <a href="/configuracao#avancado">Configuração</a>.
   </div>
 {% endif %}
 
@@ -91,6 +150,7 @@
   </div>
 {% endif %}
 
+{% if importacao %}
 <div class="cartao">
   <h2 style="margin-top:0">Planilha carregada</h2>
   {% if importacao %}
@@ -104,11 +164,9 @@
       <a class="botao botao-principal" href="/emitir">Ir para a emissão</a>
       <a class="botao" href="/importar">Trocar planilha</a>
     </div>
-  {% else %}
-    <p class="discreto">Nenhuma planilha importada nesta sessão.</p>
-    <a class="botao botao-principal" href="/importar">Importar planilha</a>
   {% endif %}
 </div>
+{% endif %}
 
 {% if trabalho.estado != 'ocioso' %}
 <div class="cartao">
@@ -121,6 +179,7 @@
 </div>
 {% endif %}
 
+{% if not producao %}
 <div class="cartao">
   <h2 style="margin-top:0">Primeira vez no modo real?</h2>
   <ul class="discreto" style="line-height:1.8">
@@ -129,4 +188,5 @@
     <li>Deixe uma pasta de backup configurada: é ela que salva suas notas se o computador quebrar.</li>
   </ul>
 </div>
+{% endif %}
 {% endblock %}
