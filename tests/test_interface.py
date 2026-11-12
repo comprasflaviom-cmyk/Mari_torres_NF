@@ -1317,3 +1317,27 @@ def test_pdf_de_nota_emitida_em_outro_computador(cliente, dados_app, config, lin
         assert resposta.content[:4] == b"%PDF"
     finally:
         sincronizacao.desativar()
+
+
+# ---------------------------------------------------------------------------
+# Versão nova nunca roda com o JS/CSS antigo do navegador
+# ---------------------------------------------------------------------------
+def test_estaticos_com_versao_e_sem_cache_velho(cliente):
+    import re
+
+    html = cliente.get("/").text
+    versao = re.search(r'/static/app\.js\?v=([0-9a-f]{10})"', html)
+    assert versao, "app.js precisa sair com a versão na URL"
+    assert f"/static/estilo.css?v={versao.group(1)}" in html
+    resposta = cliente.get(f"/static/app.js?v={versao.group(1)}")
+    assert resposta.status_code == 200
+    assert resposta.headers["cache-control"] == "no-cache"
+
+
+def test_recibo_sem_nome_da_empresa_desabilita_o_botao(cliente):
+    html = cliente.get("/recibos").text
+    botao = html.split('id="btn-gerar-recibo"')[1].split(">")[0]
+    assert "disabled" in botao
+    _com_nome_da_empresa()
+    botao = cliente.get("/recibos").text.split('id="btn-gerar-recibo"')[1].split(">")[0]
+    assert "disabled" not in botao

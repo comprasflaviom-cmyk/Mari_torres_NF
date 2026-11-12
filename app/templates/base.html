@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titulo %}Emissor de NFS-e{% endblock %}</title>
-  <link rel="stylesheet" href="/static/estilo.css">
+  <link rel="stylesheet" href="/static/estilo.css?v={{ versao_estatico }}">
 </head>
 <body data-pagina="{{ pagina_atual }}">
   <!-- A faixa de ambiente é permanente e de cor inequívoca: é a defesa
@@ -45,7 +45,7 @@
 
   <script>window.EMISSOR_TOKEN = {{ token | tojson }};</script>
   <script>window.EMISSOR_AJUDA = {{ (ajuda or {}) | tojson }};</script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v={{ versao_estatico }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

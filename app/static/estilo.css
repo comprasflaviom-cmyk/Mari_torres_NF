@@ -232,3 +232,12 @@ table a:not(.botao):hover { text-decoration: underline; }
 .atalho-principal { background: var(--realce); border-color: var(--realce); }
 .atalho-principal strong, .atalho-principal span { color: #fff; }
 .atalho-principal:hover { box-shadow: 0 4px 14px rgba(27,95,168,.3); }
+
+/* ---- Mensagem ao lado dos botões (mostrarSituacao no app.js) ---- */
+.situacao-erro, .situacao-ok {
+  display: inline-block; padding: 8px 12px; border-radius: 8px; border: 1px solid;
+  font-size: 14px; color: inherit; max-width: 100%;
+}
+.situacao-erro { background: var(--erro-fraco); border-color: #eebfbd; color: var(--erro); font-weight: 600; }
+.situacao-ok   { background: var(--ok-fraco);   border-color: #b6dcc5; color: var(--ok); }
+.situacao-andamento { color: var(--tinta-suave); font-size: 14px; }

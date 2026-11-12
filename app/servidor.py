@@ -8,6 +8,7 @@ linha de comando.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -89,6 +90,17 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
     app.state.guardiao = guardiao
 
     app.middleware("http")(montar_middleware(guardiao))
+
+    # Trocar a versão do app não pode deixar o navegador com o JS/CSS antigo
+    # (o endereço é sempre o mesmo): versão na URL + revalidação obrigatória.
+    versao_estatico = _versao_dos_estaticos()
+
+    @app.middleware("http")
+    async def sem_cache_velho(requisicao: Request, proxima):
+        resposta = await proxima(requisicao)
+        if requisicao.url.path.startswith("/static/"):
+            resposta.headers["Cache-Control"] = "no-cache"
+        return resposta
     app.mount("/static", StaticFiles(directory=RAIZ / "static"), name="static")
 
     def tela_de_erro(requisicao: Request, titulo: str, mensagem: str, status: int, caminho_log=None):
@@ -143,6 +155,7 @@ def criar_app(guardiao: Guardiao | None = None) -> FastAPI:
                 "token": guardiao.token,
                 "ajuda": AJUDA,
                 "pendentes_mensais": _pendentes_mensais(),
+                "versao_estatico": versao_estatico,
                 **contexto,
             },
         )
@@ -719,6 +732,17 @@ _MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
 
 def _modo(ambiente: str) -> str:
     return "modo real" if ambiente == "producao" else "modo teste"
+
+
+def _versao_dos_estaticos() -> str:
+    """Hash curto do JS e do CSS: muda sozinho a cada versão nova do app."""
+    resumo = hashlib.sha1()
+    for nome in ("app.js", "estilo.css"):
+        try:
+            resumo.update((RAIZ / "static" / nome).read_bytes())
+        except OSError:
+            pass
+    return resumo.hexdigest()[:10]
 
 
 def _pendentes_mensais() -> int:

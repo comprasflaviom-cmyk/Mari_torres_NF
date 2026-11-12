@@ -27,6 +27,15 @@
   var MSG_SEM_CONEXAO = "Não foi possível falar com o aplicativo. Confira se ele " +
     "está aberto (ícone perto do relógio) e tente de novo.";
 
+  /* Mensagem ao lado de um botão, bem visível: erro em vermelho, sucesso em
+     verde, andamento discreto. Texto cinza pequeno passava despercebido. */
+  function mostrarSituacao(el, texto, tipo) {
+    if (!el) return;
+    el.textContent = texto || "";
+    el.className = el.className.replace(/\bsituacao-(erro|ok|andamento)\b/g, "").trim();
+    if (texto) el.classList.add("situacao-" + (tipo || "andamento"));
+  }
+
   /* ---- Ajuda "?" ao lado dos campos ----
      Os textos vêm de app/ajuda.py. Todo <label for="id"> com texto lá ganha um
      "?" que abre um balão; clicar fora ou Esc fecha. */
@@ -398,7 +407,7 @@
   function iniciar(modo, textoConfirmacao) {
     var escolhidas = selecionadas();
     if (!escolhidas.length) {
-      situacao.textContent = "Selecione ao menos uma linha.";
+      mostrarSituacao(situacao, "Selecione ao menos uma linha.", "erro");
       return;
     }
     var dados = new FormData();
@@ -410,20 +419,20 @@
     if (document.getElementById("sem_pdf").checked) dados.append("sem_pdf", "on");
 
     habilitar(false);
-    situacao.textContent = "Iniciando...";
+    mostrarSituacao(situacao, "Iniciando...");
 
     enviar("/emitir/iniciar", dados)
       .then(function (r) {
         if (!r.dados.ok) {
-          situacao.textContent = r.dados.mensagem || "Não foi possível iniciar.";
+          mostrarSituacao(situacao, r.dados.mensagem || "Não foi possível iniciar.", "erro");
           habilitar(true);
           return;
         }
-        situacao.textContent = r.dados.dry_run ? "Simulando..." : "Emitindo...";
+        mostrarSituacao(situacao, r.dados.dry_run ? "Simulando..." : "Emitindo...");
         acompanhar();
       })
       .catch(function (erro) {
-        situacao.textContent = MSG_SEM_CONEXAO;
+        mostrarSituacao(situacao, MSG_SEM_CONEXAO, "erro");
         habilitar(true);
       });
   }
@@ -552,12 +561,12 @@
       dados.append("descricao", document.getElementById("descricao").value);
 
       botao.disabled = true;
-      situacao.textContent = "Gerando...";
+      mostrarSituacao(situacao, "Gerando...");
       resultado.hidden = true;
       enviar("/recibos/gerar", dados)
         .then(function (r) {
-          if (!r.dados.ok) { situacao.textContent = r.dados.mensagem || MSG_ERRO; return; }
-          situacao.textContent = "";
+          if (!r.dados.ok) { mostrarSituacao(situacao, r.dados.mensagem || MSG_ERRO, "erro"); return; }
+          mostrarSituacao(situacao, "");
           numeroAtual = r.dados.numero;
           document.getElementById("resultado-titulo").textContent =
             r.dados.mensagem + " Confira o PDF antes de enviar.";
@@ -569,7 +578,7 @@
           saidaEnvio.className = "discreto";
           resultado.hidden = false;
         })
-        .catch(function () { situacao.textContent = MSG_SEM_CONEXAO; })
+        .catch(function () { mostrarSituacao(situacao, MSG_SEM_CONEXAO, "erro"); })
         .finally(function () { botao.disabled = false; });
     });
 
@@ -658,19 +667,19 @@
       dados.append("confirmacao", textoConfirmacao || "");
 
       habilitar(false);
-      situacao.textContent = "Iniciando...";
+      mostrarSituacao(situacao, "Iniciando...");
       enviar("/avulsa/emitir", dados)
         .then(function (r) {
           if (!r.dados.ok) {
-            situacao.textContent = r.dados.mensagem || "Não foi possível emitir.";
+            mostrarSituacao(situacao, r.dados.mensagem || "Não foi possível emitir.", "erro");
             habilitar(true);
             return;
           }
-          situacao.textContent = r.dados.dry_run ? "Simulando..." : "Emitindo...";
+          mostrarSituacao(situacao, r.dados.dry_run ? "Simulando..." : "Emitindo...");
           acompanhar();
         })
         .catch(function (erro) {
-          situacao.textContent = MSG_SEM_CONEXAO;
+          mostrarSituacao(situacao, MSG_SEM_CONEXAO, "erro");
           habilitar(true);
         });
     }
@@ -763,19 +772,19 @@
       dados.append("confirmacao", textoConfirmacao || "");
 
       travarBotoes(true);
-      situacao.textContent = "Iniciando...";
+      mostrarSituacao(situacao, "Iniciando...");
       enviar("/recorrencias/" + id + "/emitir", dados)
         .then(function (r) {
           if (!r.dados.ok) {
-            situacao.textContent = r.dados.mensagem || "Não foi possível emitir.";
+            mostrarSituacao(situacao, r.dados.mensagem || "Não foi possível emitir.", "erro");
             travarBotoes(false);
             return;
           }
-          situacao.textContent = "Emitindo...";
+          mostrarSituacao(situacao, "Emitindo...");
           acompanhar(situacao);
         })
         .catch(function (erro) {
-          situacao.textContent = MSG_SEM_CONEXAO;
+          mostrarSituacao(situacao, MSG_SEM_CONEXAO, "erro");
           travarBotoes(false);
         });
     }

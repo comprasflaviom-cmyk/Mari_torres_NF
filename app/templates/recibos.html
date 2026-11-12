@@ -35,8 +35,9 @@
   </div>
 
   <div class="acoes">
-    <button class="botao botao-principal" id="btn-gerar-recibo">Gerar recibo (PDF)</button>
-    <span class="discreto" id="situacao-recibo"></span>
+    <button class="botao botao-principal" id="btn-gerar-recibo"
+            {{ 'disabled title="Preencha o nome da empresa em Configuração → Empresa"' | safe if faltando }}>Gerar recibo (PDF)</button>
+    <span class="discreto" id="situacao-recibo">{% if faltando %}Falta preencher {{ faltando | join(' e ') }} da empresa — <a href="/configuracao#empresa">abrir Configuração → Empresa</a>.{% endif %}</span>
   </div>
 
   <div class="aviso aviso-ok" id="resultado-recibo" style="margin:16px 0 0" hidden>
